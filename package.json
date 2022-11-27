@@ -1,0 +1,19 @@
+{
+  "name": "alliance",
+  "version": "1.0.0",
+  "description": "multiplayer space shooter mini games",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/techsavagery/alliance.git"
+  },
+  "author": "Tech Savagery",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/techsavagery/alliance/issues"
+  },
+  "homepage": "https://github.com/techsavagery/alliance#readme"
+}
