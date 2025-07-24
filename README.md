@@ -6,6 +6,7 @@ A comprehensive multiplayer team building platform designed to strengthen workpl
 
 ### Platform Features
 - **User Account System**: Username-based accounts with comprehensive user tracking
+- **Dual Ranking System**: Individual player ranks AND team alliance ranks
 - **Team Management**: Create and manage teams with role-based permissions
 - **Game Scheduling**: Schedule recurring team building sessions
 - **Comprehensive Analytics**: Track individual and team performance metrics
@@ -13,11 +14,11 @@ A comprehensive multiplayer team building platform designed to strengthen workpl
 - **Real-time Communication**: Built-in chat and team coordination tools
 
 ### Games
-- **Alliance Defense (Shooter)**: Team-based defense game with three roles:
-  - **Gunners**: Primary damage dealers with enhanced shooting capabilities
+- **Alliance Defense (Nexus Defense)**: Team-based defense game with three roles:
+  - **Guardians**: Primary damage dealers with enhanced shooting capabilities
   - **Engineers**: Build and repair structures, create defensive barriers
   - **Medics**: Heal teammates and provide team support
-- **Coming Soon**: Puzzle games, strategy games, and more
+- **Coming Soon**: Void Breach, Alliance Wars, and more strategic operations
 
 ### Technical Features
 - **Real-time Multiplayer**: Powered by Colyseus game server
@@ -47,6 +48,69 @@ A comprehensive multiplayer team building platform designed to strengthen workpl
                          │                 │
                          └─────────────────┘
 ```
+
+## 🏆 Alliance Ranking Systems
+
+### Individual Player Ranks
+Players advance through military-inspired ranks based on experience and performance:
+
+```
+🎯 Recruit (Level 1-4)
+🗡️ Lieutenant (Level 5-9)
+⚔️ Captain (Level 10-14)
+🎖️ Major (Level 15-19)
+🛡️ Colonel (Level 20-24)
+⚡ General (Level 25-29)
+🔥 Field Marshal (Level 30-39)
+👑 Grand Marshal (Level 40-49)
+⭐ Supreme Commander (Level 50+)
+```
+
+**Experience Gain:**
+- Mission completion: 50-200 XP
+- Victory bonus: +50% XP
+- Perfect mission: +25% XP
+- Teamwork actions: 10-25 XP
+- Leadership moments: 15-30 XP
+
+### Team Alliance Ranks
+Teams progress through alliance ranks based on collective victories and teamwork:
+
+```
+🎪 Rookie Squad (Level 1-4)
+🔍 Patrol Unit (Level 5-9)
+🎯 Strike Team (Level 10-19)
+⚔️ Combat Team (Level 20-29)
+🛡️ Tactical Squad (Level 30-44)
+⚡ Advanced Unit (Level 45-59)
+🔥 Veteran Coalition (Level 60-79)
+💎 Elite Strike Force (Level 80-99)
+🌟 Legendary Alliance (Level 100+)
+```
+
+**Team Experience Gain:**
+- Mission victory: 100-400 Team XP
+- Perfect teamwork: +50% Team XP
+- Win streak bonuses: +25% per consecutive win
+- Shared among all active members
+- Higher difficulty missions = more XP
+
+### Ranking Benefits
+
+**Individual Ranks:**
+- Unlock new customization options
+- Access to advanced game modes
+- Increased XP multipliers
+- Exclusive player titles and badges
+- Leadership privileges in teams
+
+**Team Ranks:**
+- Unlock exclusive team missions
+- Access to advanced team customization
+- Team XP multipliers
+- Prestigious alliance badges
+- Priority matchmaking
+- Exclusive rewards and achievements
 
 ## 🚀 Quick Start with Docker
 
@@ -97,6 +161,40 @@ docker-compose up -d --build
 - **Main Platform**: http://localhost
 - **Game Server Monitor**: http://localhost/colyseus (development only)
 - **Database**: localhost:5432
+
+## 🎮 User Experience Flow
+
+### 1. Account Creation
+- Register with username (unique identifier)
+- Start as **Recruit** rank
+- Join the Alliance network
+
+### 2. Team Formation
+- **Form Alliance**: Create team, become leader, invite members
+- **Solo Mission**: Quick matchmaking with other solo players
+- Teams start as **Rookie Squad** rank
+
+### 3. Mission Selection
+- Browse available operations in Mission Control
+- View team stats and current rankings
+- Select from Alliance-themed games
+
+### 4. Pre-Mission Briefing
+- Detailed mission objectives and rules
+- Role assignments and controls
+- Victory conditions and XP rewards
+- Team composition and strategy
+
+### 5. Gameplay
+- Real-time cooperative missions
+- Live score tracking and team coordination
+- Progressive difficulty with wave-based challenges
+
+### 6. Post-Mission Results
+- Individual and team XP gains
+- Rank progression and achievements
+- Performance analytics and ratings
+- Option to continue or return to lobby
 
 ## 🛠️ Development Setup
 
@@ -155,7 +253,7 @@ gameServer.define('your_game', YourGameRoom);
 
 3. **Add to Frontend**:
 ```typescript
-// frontend/src/pages/index.tsx
+// frontend/src/components/GameLobby.tsx
 {
   id: 'your_game',
   name: 'Your Game Name',
@@ -165,7 +263,9 @@ gameServer.define('your_game', YourGameRoom);
   duration: '20-30 min',
   difficulty: 'Medium',
   icon: YourIcon,
-  available: true
+  available: true,
+  roles: ['Role1', 'Role2', 'Role3'],
+  theme: 'Your Theme'
 }
 ```
 
@@ -199,7 +299,7 @@ Games can be configured via the database or environment variables:
   gameSpeed: 60, // FPS
   enemySpawnRate: 3000, // milliseconds
   difficultyScaling: 1.2,
-  allowedRoles: ['gunner', 'engineer', 'medic']
+  allowedRoles: ['guardian', 'engineer', 'medic']
 }
 ```
 
@@ -210,18 +310,21 @@ Games can be configured via the database or environment variables:
 - Skill rating calculations
 - Achievement progress
 - Learning curve analysis
+- Rank progression history
 
 ### Team Analytics
 - Team performance metrics
 - Collaboration effectiveness
 - Communication patterns
 - Leadership emergence
+- Alliance rank progression
 
 ### Game Analytics
 - Session success rates
 - Difficulty progression
 - Player engagement metrics
 - Retention analysis
+- Mission completion rates
 
 ## 🚀 Deployment
 
@@ -305,7 +408,7 @@ npm run loadtest
 ### Load Testing
 ```bash
 # Test with multiple clients
-npx @colyseus/loadtest loadtest/shooter.ts --room shooter_game --numClients 10
+npx @colyseus/loadtest loadtest/nexus_defense.ts --room nexus_defense --numClients 10
 ```
 
 ## 🤝 Contributing
@@ -326,13 +429,15 @@ npx @colyseus/loadtest loadtest/shooter.ts --room shooter_game --numClients 10
 
 ### Phase 1 (Current)
 - [x] User authentication system
-- [x] Team management
-- [x] Shooter game implementation
-- [x] Basic analytics
+- [x] Individual player ranking system
+- [x] Team management and ranking system
+- [x] Nexus Defense game implementation
+- [x] Comprehensive analytics
 - [x] Docker deployment
 
 ### Phase 2
-- [ ] Puzzle-based team games
+- [ ] Void Breach game (dimensional rifts)
+- [ ] Alliance Wars (strategic warfare)
 - [ ] Advanced analytics dashboard
 - [ ] Mobile app support
 - [ ] Team scheduling system
@@ -344,6 +449,7 @@ npx @colyseus/loadtest loadtest/shooter.ts --room shooter_game --numClients 10
 - [ ] Enterprise features
 - [ ] Advanced reporting
 - [ ] Multi-tenant support
+- [ ] Tournament system
 
 ## 📝 License
 
@@ -365,4 +471,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Alliance** - Building stronger teams through play 🎮
+**Alliance** - Unite. Play. Conquer. 🛡️
+
+*Rise through the ranks. Build legendary alliances. Prove your worth in tactical combat.*

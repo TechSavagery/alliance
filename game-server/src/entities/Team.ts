@@ -70,6 +70,9 @@ export class Team {
   @Column({ default: 0 })
   teamExperience: number;
 
+  @Column({ length: 50, default: 'Rookie Squad' })
+  teamRank: string;
+
   @Column({ type: 'json', nullable: true })
   gameTypeStats: {
     [gameType: string]: {
@@ -165,7 +168,20 @@ export class Team {
     const newLevel = Math.floor(this.teamExperience / 2000) + 1;
     if (newLevel > this.teamLevel) {
       this.teamLevel = newLevel;
+      this.updateTeamRank();
     }
+  }
+
+  updateTeamRank(): void {
+    if (this.teamLevel >= 100) this.teamRank = 'Legendary Alliance';
+    else if (this.teamLevel >= 80) this.teamRank = 'Elite Strike Force';
+    else if (this.teamLevel >= 60) this.teamRank = 'Veteran Coalition';
+    else if (this.teamLevel >= 45) this.teamRank = 'Advanced Unit';
+    else if (this.teamLevel >= 30) this.teamRank = 'Tactical Squad';
+    else if (this.teamLevel >= 20) this.teamRank = 'Combat Team';
+    else if (this.teamLevel >= 10) this.teamRank = 'Strike Team';
+    else if (this.teamLevel >= 5) this.teamRank = 'Patrol Unit';
+    else this.teamRank = 'Rookie Squad';
   }
 
   updateWinRate(): void {

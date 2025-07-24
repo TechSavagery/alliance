@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { 
   Shield, Target, Users, User, Crown, Play, ArrowLeft, 
   LogOut, Zap, Clock, Trophy, Star, Crosshair, Wrench, 
-  Heart, Globe, Lock
+  Heart, Globe, Lock, TrendingUp, Award
 } from 'lucide-react';
 
 interface User {
@@ -23,6 +23,14 @@ interface Team {
   members: User[];
   isPublic: boolean;
   leaderId: string;
+  teamLevel?: number;
+  teamExperience?: number;
+  teamRank?: string;
+  totalWins?: number;
+  totalLosses?: number;
+  winRate?: number;
+  currentStreak?: number;
+  bestStreak?: number;
 }
 
 interface GameLobbyProps {
@@ -45,6 +53,19 @@ interface Game {
   roles: string[];
   theme: string;
 }
+
+// Alliance team ranking system
+const getTeamRankInfo = (teamLevel: number) => {
+  if (teamLevel >= 100) return { name: 'Legendary Alliance', color: 'from-yellow-300 to-yellow-600', icon: '🌟', badge: 'LEGENDARY' };
+  if (teamLevel >= 80) return { name: 'Elite Strike Force', color: 'from-purple-300 to-purple-600', icon: '💎', badge: 'ELITE' };
+  if (teamLevel >= 60) return { name: 'Veteran Coalition', color: 'from-red-300 to-red-600', icon: '🔥', badge: 'VETERAN' };
+  if (teamLevel >= 45) return { name: 'Advanced Unit', color: 'from-orange-300 to-orange-600', icon: '⚡', badge: 'ADVANCED' };
+  if (teamLevel >= 30) return { name: 'Tactical Squad', color: 'from-blue-300 to-blue-600', icon: '🛡️', badge: 'TACTICAL' };
+  if (teamLevel >= 20) return { name: 'Combat Team', color: 'from-green-300 to-green-600', icon: '⚔️', badge: 'COMBAT' };
+  if (teamLevel >= 10) return { name: 'Strike Team', color: 'from-cyan-300 to-cyan-600', icon: '🎯', badge: 'STRIKE' };
+  if (teamLevel >= 5) return { name: 'Patrol Unit', color: 'from-gray-300 to-gray-600', icon: '🔍', badge: 'PATROL' };
+  return { name: 'Rookie Squad', color: 'from-slate-400 to-slate-600', icon: '🎪', badge: 'ROOKIE' };
+};
 
 // Alliance-themed games
 const availableGames: Game[] = [
@@ -240,13 +261,45 @@ export default function GameLobby({ user, team, onBack, onLogout }: GameLobbyPro
               <div className="bg-white/5 rounded-lg p-4">
                 {team ? (
                   <div>
-                    <div className="flex items-center space-x-3 mb-4">
-                      <Crown className="w-5 h-5 text-yellow-400" />
-                      <span className="font-semibold text-white">Team: {team.name}</span>
-                      <span className={`px-2 py-1 rounded text-xs ${team.isPublic ? 'bg-green-500/20 text-green-300' : 'bg-purple-500/20 text-purple-300'}`}>
-                        {team.isPublic ? 'Public' : 'Private'}
-                      </span>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <Crown className="w-5 h-5 text-yellow-400" />
+                        <span className="font-semibold text-white">Team: {team.name}</span>
+                        <span className={`px-2 py-1 rounded text-xs ${team.isPublic ? 'bg-green-500/20 text-green-300' : 'bg-purple-500/20 text-purple-300'}`}>
+                          {team.isPublic ? 'Public' : 'Private'}
+                        </span>
+                      </div>
+                      {team.teamLevel && (
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getTeamRankInfo(team.teamLevel).color} text-white`}>
+                            {getTeamRankInfo(team.teamLevel).icon} {getTeamRankInfo(team.teamLevel).name}
+                          </span>
+                        </div>
+                      )}
                     </div>
+                    
+                    {/* Team Stats */}
+                    {team.teamLevel && (
+                      <div className="grid grid-cols-4 gap-4 mb-4 text-center">
+                        <div className="bg-white/5 rounded-lg p-2">
+                          <div className="text-xs text-gray-400">Level</div>
+                          <div className="text-white font-semibold">{team.teamLevel}</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-2">
+                          <div className="text-xs text-gray-400">Win Rate</div>
+                          <div className="text-white font-semibold">{team.winRate?.toFixed(1) || 0}%</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-2">
+                          <div className="text-xs text-gray-400">Streak</div>
+                          <div className="text-white font-semibold">{team.currentStreak || 0}</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-2">
+                          <div className="text-xs text-gray-400">Best</div>
+                          <div className="text-white font-semibold">{team.bestStreak || 0}</div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="space-y-2">
                       {team.members.map((member, index) => (
                         <div key={member.id} className="flex items-center justify-between">
@@ -346,11 +399,32 @@ export default function GameLobby({ user, team, onBack, onLogout }: GameLobbyPro
                     <Users className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white flex items-center space-x-2">
-                      <span>Team: {team.name}</span>
+                    <div className="flex items-center space-x-3">
+                      <h3 className="text-xl font-bold text-white">Team: {team.name}</h3>
                       {team.isPublic ? <Globe className="w-4 h-4 text-green-400" /> : <Lock className="w-4 h-4 text-purple-400" />}
-                    </h3>
-                    <p className="text-gray-300">{team.members.length}/4 members ready</p>
+                      {team.teamLevel && (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getTeamRankInfo(team.teamLevel).color} text-white`}>
+                          {getTeamRankInfo(team.teamLevel).icon} {getTeamRankInfo(team.teamLevel).badge}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-4 text-sm text-gray-300">
+                      <span>{team.members.length}/4 members</span>
+                      {team.teamLevel && (
+                        <>
+                          <span>•</span>
+                          <span>Level {team.teamLevel}</span>
+                          <span>•</span>
+                          <span>{team.winRate?.toFixed(1) || 0}% Win Rate</span>
+                          {team.currentStreak && team.currentStreak > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="text-green-400">{team.currentStreak} Win Streak</span>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </>
               ) : (
@@ -370,6 +444,22 @@ export default function GameLobby({ user, team, onBack, onLogout }: GameLobbyPro
               <p className="text-white font-semibold">{user.displayName || user.username}</p>
             </div>
           </div>
+
+          {/* Team Progress Bar */}
+          {team && team.teamLevel && team.teamExperience !== undefined && (
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="flex justify-between text-xs text-gray-400 mb-2">
+                <span>Team Level {team.teamLevel}</span>
+                <span>{((team.teamLevel + 1) * 2000) - team.teamExperience} XP to next level</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div 
+                  className={`bg-gradient-to-r ${getTeamRankInfo(team.teamLevel).color} h-2 rounded-full transition-all duration-500`}
+                  style={{ width: `${((team.teamExperience % 2000) / 2000) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
         </motion.div>
 
         {/* Available Missions */}
@@ -459,7 +549,7 @@ export default function GameLobby({ user, team, onBack, onLogout }: GameLobbyPro
           ))}
         </div>
 
-        {/* Coming Soon Info */}
+        {/* Ranking Info */}
         <motion.div
           className="mt-12 text-center"
           initial={{ opacity: 0, y: 20 }}
@@ -467,23 +557,26 @@ export default function GameLobby({ user, team, onBack, onLogout }: GameLobbyPro
           transition={{ duration: 0.5, delay: 0.8 }}
         >
           <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 backdrop-blur-sm border border-blue-500/20 rounded-xl p-6">
-            <h4 className="text-lg font-semibold text-white mb-2">More Missions Incoming</h4>
+            <h4 className="text-lg font-semibold text-white mb-2 flex items-center justify-center space-x-2">
+              <Trophy className="w-5 h-5 text-yellow-400" />
+              <span>Team Progression System</span>
+            </h4>
             <p className="text-gray-300 text-sm mb-4">
-              Additional operations are being prepared. Each mission type offers unique challenges 
-              and requires different alliance strategies.
+              Victories and teamwork boost your alliance ranking. Higher ranks unlock exclusive rewards, 
+              special missions, and prestigious recognition throughout the Alliance network.
             </p>
             <div className="flex justify-center space-x-6 text-sm text-blue-300">
               <div className="flex items-center space-x-2">
-                <Zap className="w-4 h-4" />
-                <span>Dimensional Rifts</span>
+                <TrendingUp className="w-4 h-4" />
+                <span>Team XP Sharing</span>
               </div>
               <div className="flex items-center space-x-2">
-                <Crown className="w-4 h-4" />
-                <span>Strategic Warfare</span>
+                <Award className="w-4 h-4" />
+                <span>Rank Progression</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Star className="w-4 h-4" />
-                <span>Epic Campaigns</span>
+                <span>Elite Rewards</span>
               </div>
             </div>
           </div>

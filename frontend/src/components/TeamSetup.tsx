@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, User, Crown, Shield, Plus, Globe, Lock, LogOut, Star, Zap } from 'lucide-react';
+import { Users, User, Crown, Shield, Plus, Globe, Lock, LogOut, Star, Zap, Trophy } from 'lucide-react';
 
 interface User {
   id: string;
@@ -19,6 +19,14 @@ interface Team {
   members: User[];
   isPublic: boolean;
   leaderId: string;
+  teamLevel?: number;
+  teamExperience?: number;
+  teamRank?: string;
+  totalWins?: number;
+  totalLosses?: number;
+  winRate?: number;
+  currentStreak?: number;
+  bestStreak?: number;
 }
 
 interface TeamSetupProps {
@@ -27,7 +35,7 @@ interface TeamSetupProps {
   onLogout: () => void;
 }
 
-// Alliance ranking system
+// Alliance ranking system for individual players
 const getRankInfo = (level: number) => {
   if (level >= 50) return { name: 'Supreme Commander', color: 'from-yellow-400 to-orange-500', icon: '⭐' };
   if (level >= 40) return { name: 'Grand Marshal', color: 'from-purple-400 to-pink-500', icon: '👑' };
@@ -38,6 +46,19 @@ const getRankInfo = (level: number) => {
   if (level >= 10) return { name: 'Captain', color: 'from-cyan-400 to-blue-500', icon: '⚔️' };
   if (level >= 5) return { name: 'Lieutenant', color: 'from-gray-400 to-cyan-500', icon: '🗡️' };
   return { name: 'Recruit', color: 'from-gray-500 to-gray-400', icon: '🎯' };
+};
+
+// Alliance team ranking system
+const getTeamRankInfo = (teamLevel: number) => {
+  if (teamLevel >= 100) return { name: 'Legendary Alliance', color: 'from-yellow-300 to-yellow-600', icon: '🌟', badge: 'LEGENDARY' };
+  if (teamLevel >= 80) return { name: 'Elite Strike Force', color: 'from-purple-300 to-purple-600', icon: '💎', badge: 'ELITE' };
+  if (teamLevel >= 60) return { name: 'Veteran Coalition', color: 'from-red-300 to-red-600', icon: '🔥', badge: 'VETERAN' };
+  if (teamLevel >= 45) return { name: 'Advanced Unit', color: 'from-orange-300 to-orange-600', icon: '⚡', badge: 'ADVANCED' };
+  if (teamLevel >= 30) return { name: 'Tactical Squad', color: 'from-blue-300 to-blue-600', icon: '🛡️', badge: 'TACTICAL' };
+  if (teamLevel >= 20) return { name: 'Combat Team', color: 'from-green-300 to-green-600', icon: '⚔️', badge: 'COMBAT' };
+  if (teamLevel >= 10) return { name: 'Strike Team', color: 'from-cyan-300 to-cyan-600', icon: '🎯', badge: 'STRIKE' };
+  if (teamLevel >= 5) return { name: 'Patrol Unit', color: 'from-gray-300 to-gray-600', icon: '🔍', badge: 'PATROL' };
+  return { name: 'Rookie Squad', color: 'from-slate-400 to-slate-600', icon: '🎪', badge: 'ROOKIE' };
 };
 
 export default function TeamSetup({ user, onTeamReady, onLogout }: TeamSetupProps) {
@@ -61,7 +82,15 @@ export default function TeamSetup({ user, onTeamReady, onLogout }: TeamSetupProp
         name: teamName.trim(),
         members: [user],
         isPublic,
-        leaderId: user.id
+        leaderId: user.id,
+        teamLevel: 1,
+        teamExperience: 0,
+        teamRank: 'Rookie Squad',
+        totalWins: 0,
+        totalLosses: 0,
+        winRate: 0,
+        currentStreak: 0,
+        bestStreak: 0
       };
       
       onTeamReady(newTeam);
@@ -144,6 +173,38 @@ export default function TeamSetup({ user, onTeamReady, onLogout }: TeamSetupProp
                     <p className="text-white font-medium">Private</p>
                     <p className="text-xs text-gray-400">Invite only</p>
                   </button>
+                </div>
+              </div>
+
+              {/* Team Ranking Info */}
+              <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 backdrop-blur-sm border border-blue-500/20 rounded-xl p-4">
+                <h4 className="text-sm font-semibold text-white mb-2 flex items-center space-x-2">
+                  <Trophy className="w-4 h-4 text-yellow-400" />
+                  <span>Team Ranking System</span>
+                </h4>
+                <p className="text-xs text-gray-300 mb-3">
+                  Your team will start as a <span className="text-blue-300 font-semibold">Rookie Squad</span> and 
+                  advance through team missions and victories.
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-400">🎪 Rookie Squad</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-400">🔍 Patrol Unit</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-blue-300">🎯 Strike Team</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-green-300">⚔️ Combat Team</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-purple-300">🛡️ Tactical Squad</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-yellow-300">🌟 Legendary Alliance</span>
+                  </div>
                 </div>
               </div>
 
@@ -298,8 +359,12 @@ export default function TeamSetup({ user, onTeamReady, onLogout }: TeamSetupProp
                   <span>Invite up to 3 more members</span>
                 </div>
                 <div className="flex items-center justify-center space-x-2">
+                  <Trophy className="w-4 h-4" />
+                  <span>Team ranking progression</span>
+                </div>
+                <div className="flex items-center justify-center space-x-2">
                   <Star className="w-4 h-4" />
-                  <span>Shared team progression</span>
+                  <span>Shared team achievements</span>
                 </div>
               </div>
             </div>
@@ -341,19 +406,44 @@ export default function TeamSetup({ user, onTeamReady, onLogout }: TeamSetupProp
           </motion.div>
         </div>
 
-        {/* Additional Info */}
+        {/* Team Ranking System Info */}
         <motion.div
-          className="mt-12 text-center"
+          className="mt-12"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.6 }}
         >
           <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 backdrop-blur-sm border border-blue-500/20 rounded-xl p-6">
-            <h4 className="text-lg font-semibold text-white mb-2">Ready for Battle</h4>
-            <p className="text-gray-300 text-sm">
-              Both paths lead to the same epic battles. Teams earn shared XP and achievements, 
-              while solo players get matched with others for balanced gameplay.
+            <h4 className="text-lg font-semibold text-white mb-4 flex items-center space-x-2">
+              <Trophy className="w-5 h-5 text-yellow-400" />
+              <span>Alliance Ranking System</span>
+            </h4>
+            <p className="text-gray-300 text-sm mb-4">
+              Teams progress through ranks based on victories, teamwork, and mission performance. 
+              Higher-ranked alliances unlock exclusive rewards and recognition.
             </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div className="bg-white/5 rounded-lg p-3 text-center">
+                <div className="text-lg mb-1">🎪</div>
+                <div className="text-white font-medium">Rookie Squad</div>
+                <div className="text-gray-400">Level 1-4</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 text-center">
+                <div className="text-lg mb-1">🎯</div>
+                <div className="text-white font-medium">Strike Team</div>
+                <div className="text-gray-400">Level 10-19</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 text-center">
+                <div className="text-lg mb-1">🛡️</div>
+                <div className="text-white font-medium">Tactical Squad</div>
+                <div className="text-gray-400">Level 30-44</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 text-center">
+                <div className="text-lg mb-1">🌟</div>
+                <div className="text-white font-medium">Legendary Alliance</div>
+                <div className="text-gray-400">Level 100+</div>
+              </div>
+            </div>
           </div>
         </motion.div>
       </main>
