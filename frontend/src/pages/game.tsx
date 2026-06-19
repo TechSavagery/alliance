@@ -1,28 +1,6 @@
 import Head from "next/head";
-import dynamic from "next/dynamic";
 import Link from "next/link";
-
-const PhaserGame = dynamic(() => import("@/components/PhaserGame"), {
-  ssr: false,
-  loading: () => (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 840,
-        aspectRatio: "4 / 3",
-        margin: "0 auto",
-        display: "grid",
-        placeItems: "center",
-        border: "1px solid #1f3a4d",
-        borderRadius: 12,
-        color: "#9be7ff",
-        fontFamily: "monospace",
-      }}
-    >
-      Loading game...
-    </div>
-  ),
-});
+import PhaserGame from "@/components/PhaserGame";
 
 export default function GamePage() {
   return (

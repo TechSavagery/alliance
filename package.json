@@ -4,7 +4,9 @@
   "description": "multiplayer space shooter mini games",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:server": "npm --prefix game-server start",
+    "dev:frontend": "npm --prefix frontend run dev:clean",
+    "test": "npm --prefix game-server test"
   },
   "repository": {
     "type": "git",
