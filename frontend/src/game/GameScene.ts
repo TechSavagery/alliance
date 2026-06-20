@@ -1,21 +1,6 @@
 import Phaser from "phaser";
-import { Client, Room } from "@colyseus/sdk";
+import { Callbacks, Client, Room } from "@colyseus/sdk";
 import { COLYSEUS_URL, GAME_HEIGHT, GAME_WIDTH, InputPayload } from "./config";
-
-type PlayerSchema = {
-  x: number;
-  y: number;
-  rotation: number;
-  vx: number;
-  vy: number;
-};
-
-type BulletSchema = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-};
 
 export class GameScene extends Phaser.Scene {
   room?: Room;
@@ -84,54 +69,45 @@ export class GameScene extends Phaser.Scene {
       this.room = await this.client.joinOrCreate("game_room");
       this.statusText?.setText(`Connected: ${this.room.sessionId.slice(0, 8)}...`);
 
-      const state = this.room.state as {
-        players: {
-          onAdd: (
-            callback: (player: PlayerSchema, sessionId: string) => void,
-            triggerAll?: boolean
-          ) => void;
-          onRemove: (
-            callback: (player: PlayerSchema, sessionId: string) => void
-          ) => void;
-        };
-        bullets: {
-          onAdd: (
-            callback: (bullet: BulletSchema, bulletId: string) => void,
-            triggerAll?: boolean
-          ) => void;
-          onRemove: (
-            callback: (bullet: BulletSchema, bulletId: string) => void
-          ) => void;
-        };
+      const callbacks = Callbacks.get(this.room) as {
+        onAdd: (
+          property: string,
+          handler: (item: { x: number; y: number; rotation: number }, key: string) => void
+        ) => void;
+        onRemove: (
+          property: string,
+          handler: (item: unknown, key: string) => void
+        ) => void;
+        onChange: (instance: { x: number; y: number; rotation?: number }, handler: () => void) => void;
       };
 
-      state.players.onAdd((player, sessionId) => {
+      callbacks.onAdd("players", (player, sessionId) => {
         const isLocal = sessionId === this.room?.sessionId;
         const ship = this.createShip(player.x, player.y, player.rotation, isLocal);
         this.playerSprites.set(sessionId, ship);
 
-        (player as PlayerSchema & { onChange: (cb: () => void) => void }).onChange(() => {
+        callbacks.onChange(player, () => {
           ship.setPosition(player.x, player.y);
           ship.setRotation(Phaser.Math.DegToRad(player.rotation));
         });
-      }, true);
+      });
 
-      state.players.onRemove((_player, sessionId) => {
+      callbacks.onRemove("players", (_player, sessionId) => {
         this.playerSprites.get(sessionId)?.destroy();
         this.playerSprites.delete(sessionId);
       });
 
-      state.bullets.onAdd((bullet, bulletId) => {
+      callbacks.onAdd("bullets", (bullet, bulletId) => {
         const sprite = this.add.circle(bullet.x, bullet.y, 3, 0xfff06a);
         sprite.setDepth(2);
         this.bulletSprites.set(bulletId, sprite);
 
-        (bullet as BulletSchema & { onChange: (cb: () => void) => void }).onChange(() => {
+        callbacks.onChange(bullet, () => {
           sprite.setPosition(bullet.x, bullet.y);
         });
-      }, true);
+      });
 
-      state.bullets.onRemove((_bullet, bulletId) => {
+      callbacks.onRemove("bullets", (_bullet, bulletId) => {
         this.bulletSprites.get(bulletId)?.destroy();
         this.bulletSprites.delete(bulletId);
       });
