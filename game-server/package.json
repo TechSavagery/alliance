@@ -5,11 +5,12 @@
   "description": "Alliance multiplayer game server",
   "main": "lib/index.js",
   "scripts": {
-    "start": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build:shared": "npm --prefix ../shared run build",
+    "start": "npm run build:shared && ts-node-dev --respawn --transpile-only src/index.ts",
     "loadtest": "colyseus-loadtest loadtest/example.ts --room game_room --numClients 2",
     "build": "npm run clean && tsc && node node_modules/copyfiles/copyfiles package.json ./lib && node node_modules/copyfiles/copyfiles development.env ./lib",
     "clean": "node node_modules/rimraf/bin lib",
-    "test": "mocha --require ts-node/register test/**_test.ts --exit --timeout 15000"
+    "test": "npm run build:shared && mocha --require ts-node/register test/**_test.ts --exit --timeout 15000"
   },
   "author": "Tech Savagery",
   "license": "ISC",
@@ -27,6 +28,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "@alliance/shared": "file:../shared",
     "@colyseus/monitor": "^0.17.7",
     "@colyseus/schema": "^4.0.8",
     "@colyseus/ws-transport": "^0.17.9",

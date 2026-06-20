@@ -1,41 +1,38 @@
 import { Room, Client } from "colyseus";
-import { Bullet, GameState, Player } from "./schema/GameState";
-
-export const MAP_WIDTH = 800;
-export const MAP_HEIGHT = 600;
-
-const ROTATION_SPEED = 4;
-const THRUST = 0.2;
-const MAX_SPEED = 7;
-const FRICTION = 0.99;
-const BULLET_SPEED = 10;
-const FIRE_COOLDOWN_MS = 200;
-
-export interface InputPayload {
-  left: boolean;
-  right: boolean;
-  up: boolean;
-  shoot: boolean;
-}
-
-const defaultInput = (): InputPayload => ({
-  left: false,
-  right: false,
-  up: false,
-  shoot: false,
-});
+import {
+  applyPlayerInput,
+  BULLET_HIT_RADIUS,
+  BULLET_SPEED,
+  defaultInput,
+  FIRE_COOLDOWN_MS,
+  InputPayload,
+  INVULN_MS,
+  KILL_SCORE,
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  RESPAWN_MS,
+  SHIP_HIT_RADIUS,
+  TICK_MS,
+} from "@alliance/shared";
+import { Bullet, GameState, Player } from "@alliance/shared/schema";
 
 export class GameRoom extends Room {
   state = new GameState();
 
   private inputs = new Map<string, InputPayload>();
   private lastShot = new Map<string, number>();
+  private bulletOwners = new Map<string, string>();
+  private respawnAt = new Map<string, number>();
+  private invulnerableUntil = new Map<string, number>();
   private bulletId = 0;
 
   onCreate() {
-    this.setSimulationInterval((deltaTime) => this.update(deltaTime), 1000 / 60);
+    this.setSimulationInterval((deltaTime) => this.update(deltaTime), TICK_MS);
 
     this.onMessage("input", (client, payload: InputPayload) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player?.alive) return;
+
       this.inputs.set(client.sessionId, {
         left: !!payload.left,
         right: !!payload.right,
@@ -47,9 +44,7 @@ export class GameRoom extends Room {
 
   onJoin(client: Client) {
     const player = new Player();
-    player.x = MAP_WIDTH / 2 + (Math.random() - 0.5) * 200;
-    player.y = MAP_HEIGHT / 2 + (Math.random() - 0.5) * 200;
-    player.rotation = Math.random() * 360;
+    this.spawnPlayer(player);
 
     this.state.players.set(client.sessionId, player);
     this.inputs.set(client.sessionId, defaultInput());
@@ -59,44 +54,35 @@ export class GameRoom extends Room {
     this.state.players.delete(client.sessionId);
     this.inputs.delete(client.sessionId);
     this.lastShot.delete(client.sessionId);
+    this.respawnAt.delete(client.sessionId);
+    this.invulnerableUntil.delete(client.sessionId);
   }
 
   private update(deltaTime: number) {
-    const dt = deltaTime / (1000 / 60);
+    const dt = deltaTime / TICK_MS;
 
     this.state.players.forEach((player, sessionId) => {
+      if (!player.alive) {
+        const respawnTime = this.respawnAt.get(sessionId);
+        if (respawnTime && Date.now() >= respawnTime) {
+          this.respawnPlayer(sessionId, player);
+        }
+        return;
+      }
+
       const input = this.inputs.get(sessionId);
       if (!input) return;
 
-      if (input.left) player.rotation -= ROTATION_SPEED * dt;
-      if (input.right) player.rotation += ROTATION_SPEED * dt;
-
-      if (input.up) {
-        const rad = (player.rotation * Math.PI) / 180;
-        player.vx += Math.sin(rad) * THRUST * dt;
-        player.vy += -Math.cos(rad) * THRUST * dt;
-      }
-
-      const speed = Math.hypot(player.vx, player.vy);
-      if (speed > MAX_SPEED) {
-        player.vx = (player.vx / speed) * MAX_SPEED;
-        player.vy = (player.vy / speed) * MAX_SPEED;
-      }
-
-      player.vx *= FRICTION;
-      player.vy *= FRICTION;
-      player.x += player.vx * dt;
-      player.y += player.vy * dt;
-
-      this.wrapPosition(player);
+      applyPlayerInput(player, input, dt);
 
       if (input.shoot) {
         this.tryShoot(sessionId, player);
       }
     });
 
-    const bulletsToRemove: string[] = [];
-    this.state.bullets.forEach((bullet, id) => {
+    const bulletsToRemove = new Set<string>();
+
+    this.state.bullets.forEach((bullet, bulletId) => {
       bullet.x += bullet.vx * dt;
       bullet.y += bullet.vy * dt;
 
@@ -106,18 +92,70 @@ export class GameRoom extends Room {
         bullet.y < -20 ||
         bullet.y > MAP_HEIGHT + 20
       ) {
-        bulletsToRemove.push(id);
+        bulletsToRemove.add(bulletId);
+        return;
       }
+
+      this.state.players.forEach((player, sessionId) => {
+        if (!player.alive) return;
+        if (this.isInvulnerable(sessionId)) return;
+
+        const ownerId = this.bulletOwners.get(bulletId);
+        if (ownerId === sessionId) return;
+
+        const dist = Math.hypot(bullet.x - player.x, bullet.y - player.y);
+        if (dist <= SHIP_HIT_RADIUS + BULLET_HIT_RADIUS) {
+          bulletsToRemove.add(bulletId);
+          this.handleHit(ownerId, sessionId, player);
+        }
+      });
     });
 
-    bulletsToRemove.forEach((id) => this.state.bullets.delete(id));
+    bulletsToRemove.forEach((bulletId) => {
+      this.state.bullets.delete(bulletId);
+      this.bulletOwners.delete(bulletId);
+    });
   }
 
-  private wrapPosition(player: Player) {
-    if (player.x < 0) player.x = MAP_WIDTH;
-    if (player.x > MAP_WIDTH) player.x = 0;
-    if (player.y < 0) player.y = MAP_HEIGHT;
-    if (player.y > MAP_HEIGHT) player.y = 0;
+  private handleHit(
+    killerId: string | undefined,
+    victimId: string,
+    victim: Player
+  ) {
+    victim.alive = false;
+    victim.deaths += 1;
+    victim.vx = 0;
+    victim.vy = 0;
+    this.respawnAt.set(victimId, Date.now() + RESPAWN_MS);
+
+    if (!killerId) return;
+
+    const killer = this.state.players.get(killerId);
+    if (!killer) return;
+
+    killer.kills += 1;
+    killer.score += KILL_SCORE;
+  }
+
+  private respawnPlayer(sessionId: string, player: Player) {
+    this.spawnPlayer(player);
+    player.alive = true;
+    this.respawnAt.delete(sessionId);
+    this.invulnerableUntil.set(sessionId, Date.now() + INVULN_MS);
+    this.inputs.set(sessionId, defaultInput());
+  }
+
+  private spawnPlayer(player: Player) {
+    player.x = MAP_WIDTH / 2 + (Math.random() - 0.5) * 240;
+    player.y = MAP_HEIGHT / 2 + (Math.random() - 0.5) * 180;
+    player.rotation = Math.random() * 360;
+    player.vx = 0;
+    player.vy = 0;
+  }
+
+  private isInvulnerable(sessionId: string) {
+    const until = this.invulnerableUntil.get(sessionId);
+    return until !== undefined && Date.now() < until;
   }
 
   private tryShoot(sessionId: string, player: Player) {
@@ -134,6 +172,8 @@ export class GameRoom extends Room {
     bullet.vx = Math.sin(rad) * BULLET_SPEED + player.vx * 0.5;
     bullet.vy = -Math.cos(rad) * BULLET_SPEED + player.vy * 0.5;
 
-    this.state.bullets.set(`b${this.bulletId++}`, bullet);
+    const bulletId = `b${this.bulletId++}`;
+    this.state.bullets.set(bulletId, bullet);
+    this.bulletOwners.set(bulletId, sessionId);
   }
 }

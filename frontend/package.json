@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:clean": "rm -rf .next && next dev",
+    "build:shared": "npm --prefix ../shared run build",
+    "dev": "npm run build:shared && next dev",
+    "dev:clean": "npm run build:shared && rm -rf .next && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@alliance/shared": "file:../shared",
     "@colyseus/sdk": "^0.17.26",
     "@types/node": "18.14.0",
     "@types/react": "18.0.28",

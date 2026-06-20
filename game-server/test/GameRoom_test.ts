@@ -1,5 +1,6 @@
 import assert from "assert";
 import { ColyseusTestServer, boot } from "@colyseus/testing";
+import { KILL_SCORE, MAP_HEIGHT, MAP_WIDTH } from "@alliance/shared";
 import appConfig from "../src/app.config";
 
 describe("Alliance game server", () => {
@@ -25,12 +26,11 @@ describe("Alliance game server", () => {
 
     await room.waitForNextPatch();
 
-    const players = client.state.players;
-    assert.ok(players.has(client.sessionId));
-
-    const player = players.get(client.sessionId);
-    assert.ok(player.x >= 0 && player.x <= 800);
-    assert.ok(player.y >= 0 && player.y <= 600);
+    const player = client.state.players.get(client.sessionId);
+    assert.ok(player);
+    assert.strictEqual(player.alive, true);
+    assert.ok(player.x >= 0 && player.x <= MAP_WIDTH);
+    assert.ok(player.y >= 0 && player.y <= MAP_HEIGHT);
   });
 
   it("moves a player when input is received", async () => {
@@ -52,5 +52,31 @@ describe("Alliance game server", () => {
     const endPlayer = client.state.players.get(client.sessionId);
     const moved = endPlayer.x !== startX || endPlayer.y !== startY;
     assert.ok(moved, "player should move after thrust input");
+  });
+
+  it("awards score when a bullet hits another player", async () => {
+    const room = await colyseus.createRoom("game_room", {});
+    const shooter = await colyseus.connectTo(room);
+    const target = await colyseus.connectTo(room);
+
+    await room.waitForNextPatch();
+
+    const shooterState = room.state.players.get(shooter.sessionId);
+    const targetState = room.state.players.get(target.sessionId);
+
+    shooterState.x = 100;
+    shooterState.y = 300;
+    shooterState.rotation = 90;
+    targetState.x = 115;
+    targetState.y = 300;
+
+    shooter.send("input", { left: false, right: false, up: false, shoot: true });
+    await room.waitForNextSimulationTick();
+    await room.waitForNextPatch();
+
+    assert.strictEqual(room.state.players.get(shooter.sessionId).kills, 1);
+    assert.strictEqual(room.state.players.get(shooter.sessionId).score, KILL_SCORE);
+    assert.strictEqual(room.state.players.get(target.sessionId).deaths, 1);
+    assert.strictEqual(room.state.players.get(target.sessionId).alive, false);
   });
 });

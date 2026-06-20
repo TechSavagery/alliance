@@ -6,6 +6,10 @@ export class Player extends Schema {
   @type("number") rotation: number = 0;
   @type("number") vx: number = 0;
   @type("number") vy: number = 0;
+  @type("number") kills: number = 0;
+  @type("number") deaths: number = 0;
+  @type("number") score: number = 0;
+  @type("boolean") alive: boolean = true;
 }
 
 export class Bullet extends Schema {

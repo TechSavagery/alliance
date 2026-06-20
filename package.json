@@ -2,10 +2,16 @@
   "name": "alliance",
   "version": "1.0.0",
   "description": "multiplayer space shooter mini games",
-  "main": "index.js",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "frontend",
+    "game-server"
+  ],
   "scripts": {
-    "dev:server": "npm --prefix game-server start",
-    "dev:frontend": "npm --prefix frontend run dev:clean",
+    "build:shared": "npm --prefix shared run build",
+    "dev:server": "npm run build:shared && npm --prefix game-server start",
+    "dev:frontend": "npm run build:shared && npm --prefix frontend run dev:clean",
     "test": "npm --prefix game-server test"
   },
   "repository": {
