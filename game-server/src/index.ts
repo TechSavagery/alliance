@@ -1,15 +1,6 @@
-/**
- * IMPORTANT: 
- * ---------
- * Do not manually edit this file if you'd like to use Colyseus Arena
- * 
- * If you're self-hosting (without Arena), you can manually instantiate a
- * Colyseus Server as documented here: 👉 https://docs.colyseus.io/server/api/#constructor-options 
- */
-import { listen } from "@colyseus/arena";
+import appConfig from "./app.config";
 
-// Import arena config
-import arenaConfig from "./arena.config";
+const port = Number(process.env.PORT) || 2567;
 
-// Create and listen on 2567 (or PORT environment variable.)
-listen(arenaConfig);
+appConfig.listen(port);
+console.log(`⚔️  Alliance game server listening on ws://localhost:${port}`);
