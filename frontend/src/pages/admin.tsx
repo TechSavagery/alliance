@@ -65,7 +65,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  const apiBase = useMemo(() => `${COLYSEUS_URL}/admin/api`, []);
+  // Same-origin Next.js proxy avoids browser CORS issues with the game server.
+  const apiBase = useMemo(() => "/api/admin", []);
 
   const withToken = useCallback(
     (path: string) =>
