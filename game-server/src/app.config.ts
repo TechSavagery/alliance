@@ -9,7 +9,20 @@ const server = defineServer({
     game_room: defineRoom(GameRoom),
   },
   express: (app) => {
-    app.use(cors());
+    app.use(
+      cors({
+        origin: true,
+        credentials: false,
+        allowedHeaders: [
+          "Origin",
+          "X-Requested-With",
+          "Content-Type",
+          "Accept",
+          "Authorization",
+          "x-admin-token",
+        ],
+      })
+    );
     app.get("/", (_req, res) => {
       res.send("Alliance game server — ready for takeoff.");
     });

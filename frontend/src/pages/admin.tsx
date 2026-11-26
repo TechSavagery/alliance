@@ -67,15 +67,18 @@ export default function AdminPage() {
 
   const apiBase = useMemo(() => `${COLYSEUS_URL}/admin/api`, []);
 
+  const withToken = useCallback(
+    (path: string) =>
+      `${apiBase}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`,
+    [apiBase, token]
+  );
+
   const fetchRooms = useCallback(async () => {
     setLoading(true);
     try {
-      const headers = { "x-admin-token": token };
       const [roomsResponse, summaryResponse] = await Promise.all([
-        fetch(`${apiBase}/rooms?token=${encodeURIComponent(token)}`, { headers }),
-        fetch(`${apiBase}/stats/summary?token=${encodeURIComponent(token)}`, {
-          headers,
-        }),
+        fetch(withToken("/rooms")),
+        fetch(withToken("/stats/summary")),
       ]);
 
       if (!roomsResponse.ok) {
@@ -99,7 +102,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiBase, token]);
+  }, [withToken]);
 
   useEffect(() => {
     void fetchRooms();
@@ -109,16 +112,10 @@ export default function AdminPage() {
     return () => clearInterval(id);
   }, [fetchRooms]);
 
-  async function runAction(
-    path: string,
-    method: "POST" = "POST"
-  ) {
+  async function runAction(path: string, method: "POST" = "POST") {
     setLoading(true);
     try {
-      const response = await fetch(`${apiBase}${path}`, {
-        method,
-        headers: { "x-admin-token": token },
-      });
+      const response = await fetch(withToken(path), { method });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${response.status}`);
