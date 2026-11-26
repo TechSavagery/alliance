@@ -1,0 +1,36 @@
+import { MapSchema, Schema, type } from "@colyseus/schema";
+
+export class SkyRaidPlayer extends Schema {
+  @type("number") x: number = 0;
+  @type("number") y: number = 0;
+  @type("number") seat: number = 0;
+  @type("number") score: number = 0;
+  @type("number") kills: number = 0;
+  @type("number") deaths: number = 0;
+  @type("boolean") alive: boolean = true;
+}
+
+export class SkyRaidBullet extends Schema {
+  @type("number") x: number = 0;
+  @type("number") y: number = 0;
+  @type("number") vy: number = 0;
+  @type("string") ownerId: string = "";
+}
+
+export class SkyRaidEnemy extends Schema {
+  @type("number") x: number = 0;
+  @type("number") y: number = 0;
+  @type("number") vx: number = 0;
+  @type("number") vy: number = 0;
+  /** 0 = circle fighter, 1 = square tank, 2 = diamond bomber */
+  @type("number") kind: number = 0;
+  @type("number") hp: number = 1;
+}
+
+export class SkyRaidState extends Schema {
+  @type({ map: SkyRaidPlayer }) players = new MapSchema<SkyRaidPlayer>();
+  @type({ map: SkyRaidBullet }) bullets = new MapSchema<SkyRaidBullet>();
+  @type({ map: SkyRaidEnemy }) enemies = new MapSchema<SkyRaidEnemy>();
+  @type("number") scrollY: number = 0;
+  @type("number") wave: number = 1;
+}

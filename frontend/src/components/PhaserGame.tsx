@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type Phaser from "phaser";
 
-export default function PhaserGame() {
+type PhaserGameProps = {
+  loader: () => Promise<{ default?: unknown } & Record<string, unknown>>;
+  exportName: string;
+};
+
+export default function PhaserGame({ loader, exportName }: PhaserGameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -16,10 +21,16 @@ export default function PhaserGame() {
 
     let cancelled = false;
 
-    import("@/game/GameScene")
-      .then(({ createPhaserGame }) => {
+    loader()
+      .then((mod) => {
         if (cancelled || !containerRef.current) return;
-        gameRef.current = createPhaserGame(containerRef.current);
+        const factory = mod[exportName] as
+          | ((parent: HTMLElement) => Phaser.Game)
+          | undefined;
+        if (!factory) {
+          throw new Error(`Missing export ${exportName}`);
+        }
+        gameRef.current = factory(containerRef.current);
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : "Failed to load game";
@@ -31,7 +42,7 @@ export default function PhaserGame() {
       gameRef.current?.destroy(true);
       gameRef.current = null;
     };
-  }, [mounted]);
+  }, [mounted, loader, exportName]);
 
   if (!mounted) {
     return (

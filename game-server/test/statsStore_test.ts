@@ -22,39 +22,51 @@ describe("StatsStore persistence", () => {
     }
   });
 
-  it("stores matches, players, kills, and leaderboard metrics", () => {
-    const matchId = store.startMatch("room-1");
-    store.playerJoined(matchId, "ace");
-    store.playerJoined(matchId, "target");
-
+  it("stores per-game history for stable player identities", () => {
+    const arenaMatch = store.startMatch("room-arena", "arena");
+    store.playerJoined(arenaMatch, "s1", "pilot-a", "Ace");
+    store.playerJoined(arenaMatch, "s2", "pilot-b", "Beacon");
     store.recordKill({
-      matchId,
-      killerSessionId: "ace",
-      victimSessionId: "target",
-      x: 100,
-      y: 200,
+      matchId: arenaMatch,
+      killerSessionId: "s1",
+      victimSessionId: "s2",
+      killerPlayerId: "pilot-a",
+      victimPlayerId: "pilot-b",
     });
-
-    store.updatePlayerStats(matchId, "ace", {
+    store.updatePlayerStats(arenaMatch, "s1", {
       score: 100,
       kills: 1,
       deaths: 0,
     });
-    store.updatePlayerStats(matchId, "target", {
+    store.updatePlayerStats(arenaMatch, "s2", {
       score: 0,
       kills: 0,
       deaths: 1,
     });
+    store.endMatch(arenaMatch);
 
-    store.playerLeft(matchId, "ace", { score: 100, kills: 1, deaths: 0 });
-    store.playerLeft(matchId, "target", { score: 0, kills: 0, deaths: 1 });
-    store.endMatch(matchId);
+    const skyMatch = store.startMatch("room-sky", "sky_raid");
+    store.playerJoined(skyMatch, "s3", "pilot-a", "Ace");
+    store.updatePlayerStats(skyMatch, "s3", {
+      score: 150,
+      kills: 3,
+      deaths: 1,
+    });
+    store.endMatch(skyMatch);
 
-    const summary = store.getSummary();
-    assert.strictEqual(summary.totals.matches, 1);
-    assert.strictEqual(summary.totals.kills, 1);
-    assert.strictEqual(summary.mostDangerous[0].sessionId, "ace");
-    assert.strictEqual(summary.mostDestroyed[0].sessionId, "target");
-    assert.strictEqual(summary.recentKills.length, 1);
+    const arenaSummary = store.getSummary("arena");
+    assert.strictEqual(arenaSummary.totals.matches, 1);
+    assert.strictEqual(arenaSummary.mostDangerous[0].playerId, "pilot-a");
+
+    const skySummary = store.getSummary("sky_raid");
+    assert.strictEqual(skySummary.totals.matches, 1);
+    assert.strictEqual(skySummary.totals.kills, 0);
+
+    const history = store.getPlayerHistory("pilot-a");
+    assert.strictEqual(history.lifetime.score, 250);
+    assert.strictEqual(history.lifetime.kills, 4);
+    assert.strictEqual(history.byGame.length, 2);
+    assert.ok(history.byGame.some((entry) => entry.gameId === "arena"));
+    assert.ok(history.byGame.some((entry) => entry.gameId === "sky_raid"));
   });
 });

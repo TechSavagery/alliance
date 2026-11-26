@@ -8,10 +8,13 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { GAME_TITLES } from "@alliance/shared";
 import { COLYSEUS_URL } from "@/game/config";
 
 type AdminPlayer = {
   sessionId: string;
+  playerId?: string;
+  displayName?: string;
   score: number;
   kills: number;
   deaths: number;
@@ -23,12 +26,24 @@ type AdminPlayer = {
 type AdminRoom = {
   roomId: string;
   name: string;
+  gameId?: string;
   clients: number;
   locked?: boolean;
   maxClients?: number;
   matchId?: number | null;
   players: AdminPlayer[];
   bulletCount: number;
+  enemyCount?: number;
+  wave?: number | null;
+};
+
+type Standing = {
+  playerId: string;
+  displayName: string;
+  kills: number;
+  deaths: number;
+  score: number;
+  matchesPlayed: number;
 };
 
 type StatsSummary = {
@@ -36,29 +51,19 @@ type StatsSummary = {
     matches: number;
     activeMatches: number;
     playerSessions: number;
+    uniquePlayers?: number;
     kills: number;
     totalScore: number;
   };
-  mostDangerous: Array<{
-    sessionId: string;
-    kills: number;
-    deaths: number;
-    score: number;
-    matchesPlayed: number;
-  }>;
-  mostDestroyed: Array<{
-    sessionId: string;
-    kills: number;
-    deaths: number;
-    score: number;
-    matchesPlayed: number;
-  }>;
+  mostDangerous: Standing[];
+  mostDestroyed: Standing[];
 };
 
 const DEFAULT_TOKEN = "alliance-dev";
 
 export default function AdminPage() {
   const [token, setToken] = useState(DEFAULT_TOKEN);
+  const [gameFilter, setGameFilter] = useState<string>("all");
   const [rooms, setRooms] = useState<AdminRoom[]>([]);
   const [summary, setSummary] = useState<StatsSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,9 +82,13 @@ export default function AdminPage() {
   const fetchRooms = useCallback(async () => {
     setLoading(true);
     try {
+      const summaryPath =
+        gameFilter === "all"
+          ? "/stats/summary"
+          : `/stats/summary?gameId=${encodeURIComponent(gameFilter)}`;
       const [roomsResponse, summaryResponse] = await Promise.all([
         fetch(withToken("/rooms")),
-        fetch(withToken("/stats/summary")),
+        fetch(withToken(summaryPath)),
       ]);
 
       if (!roomsResponse.ok) {
@@ -94,7 +103,17 @@ export default function AdminPage() {
 
       const data = await roomsResponse.json();
       const summaryData = await summaryResponse.json();
-      setRooms(data.rooms ?? []);
+      const allRooms: AdminRoom[] = data.rooms ?? [];
+      setRooms(
+        gameFilter === "all"
+          ? allRooms
+          : allRooms.filter(
+              (room) =>
+                room.gameId === gameFilter ||
+                room.name ===
+                  GAME_TITLES.find((game) => game.id === gameFilter)?.roomName
+            )
+      );
       setSummary(summaryData);
       setError(null);
       setLastUpdated(new Date().toLocaleTimeString());
@@ -103,7 +122,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [withToken]);
+  }, [withToken, gameFilter]);
 
   useEffect(() => {
     void fetchRooms();
@@ -152,8 +171,8 @@ export default function AdminPage() {
               </p>
             </div>
             <div style={styles.headerActions}>
-              <Link href="/game" style={styles.linkButton}>
-                Open game
+              <Link href="/" style={styles.linkButton}>
+                All games
               </Link>
               <a
                 href={`${COLYSEUS_URL}/colyseus`}
@@ -175,6 +194,21 @@ export default function AdminPage() {
                 style={styles.input}
                 autoComplete="off"
               />
+            </label>
+            <label style={styles.label}>
+              Analytics game
+              <select
+                value={gameFilter}
+                onChange={(e) => setGameFilter(e.target.value)}
+                style={styles.input}
+              >
+                <option value="all">All games (platform)</option>
+                {GAME_TITLES.map((game) => (
+                  <option key={game.id} value={game.id}>
+                    {game.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <button type="submit" style={styles.primaryButton} disabled={loading}>
               {loading ? "Refreshing..." : "Refresh"}
@@ -201,6 +235,10 @@ export default function AdminPage() {
                 <p style={styles.statValue}>{summary.totals.playerSessions}</p>
               </div>
               <div style={styles.statCard}>
+                <p style={styles.statLabel}>Unique pilots</p>
+                <p style={styles.statValue}>{summary.totals.uniquePlayers ?? 0}</p>
+              </div>
+              <div style={styles.statCard}>
                 <p style={styles.statLabel}>Total score</p>
                 <p style={styles.statValue}>{summary.totals.totalScore}</p>
               </div>
@@ -210,14 +248,20 @@ export default function AdminPage() {
           {summary && (
             <section style={styles.leaderGrid}>
               <div style={styles.roomCard}>
-                <h2 style={styles.sectionTitle}>Most dangerous (persisted)</h2>
+                <h2 style={styles.sectionTitle}>
+                  Most dangerous (
+                  {gameFilter === "all" ? "all games" : gameFilter})
+                </h2>
                 {summary.mostDangerous.length === 0 ? (
                   <p style={styles.empty}>No kill data yet.</p>
                 ) : (
                   <ul style={styles.list}>
                     {summary.mostDangerous.map((player) => (
-                      <li key={`danger-${player.sessionId}`} style={styles.listItem}>
-                        <code>{player.sessionId.slice(0, 8)}</code>
+                      <li key={`danger-${player.playerId}`} style={styles.listItem}>
+                        <span>
+                          {player.displayName}{" "}
+                          <code>{player.playerId.slice(0, 8)}</code>
+                        </span>
                         <span>
                           {player.kills}K / {player.deaths}D · {player.score} pts
                         </span>
@@ -227,14 +271,23 @@ export default function AdminPage() {
                 )}
               </div>
               <div style={styles.roomCard}>
-                <h2 style={styles.sectionTitle}>Most destroyed (persisted)</h2>
+                <h2 style={styles.sectionTitle}>
+                  Most destroyed (
+                  {gameFilter === "all" ? "all games" : gameFilter})
+                </h2>
                 {summary.mostDestroyed.length === 0 ? (
                   <p style={styles.empty}>No death data yet.</p>
                 ) : (
                   <ul style={styles.list}>
                     {summary.mostDestroyed.map((player) => (
-                      <li key={`destroyed-${player.sessionId}`} style={styles.listItem}>
-                        <code>{player.sessionId.slice(0, 8)}</code>
+                      <li
+                        key={`destroyed-${player.playerId}`}
+                        style={styles.listItem}
+                      >
+                        <span>
+                          {player.displayName}{" "}
+                          <code>{player.playerId.slice(0, 8)}</code>
+                        </span>
                         <span>
                           {player.deaths}D / {player.kills}K · {player.score} pts
                         </span>

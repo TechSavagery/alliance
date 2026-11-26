@@ -3,9 +3,14 @@ import { defineRoom, defineServer } from "colyseus";
 import { monitor } from "@colyseus/monitor";
 import { createAdminRouter } from "./admin/routes";
 import { GameRoom } from "./rooms/GameRoom";
+import { SkyRaidRoom } from "./rooms/SkyRaidRoom";
 
 const server = defineServer({
   rooms: {
+    // Primary multi-game room names
+    arena_room: defineRoom(GameRoom),
+    sky_raid_room: defineRoom(SkyRaidRoom),
+    // Backward-compatible alias for the original shooter
     game_room: defineRoom(GameRoom),
   },
   express: (app) => {
@@ -24,7 +29,7 @@ const server = defineServer({
       })
     );
     app.get("/", (_req, res) => {
-      res.send("Alliance game server — ready for takeoff.");
+      res.send("Alliance multi-game server — ready for takeoff.");
     });
     app.use("/admin/api", createAdminRouter());
     app.use("/colyseus", monitor());

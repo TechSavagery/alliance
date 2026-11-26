@@ -2,16 +2,17 @@ import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
 
-export type MatchRecord = {
-  id: number;
-  roomId: string;
-  startedAt: string;
-  endedAt: string | null;
-  status: "active" | "ended";
+export type PlayerStanding = {
+  playerId: string;
+  displayName: string;
+  score: number;
+  kills: number;
+  deaths: number;
+  matchesPlayed: number;
 };
 
-export type PlayerStanding = {
-  sessionId: string;
+export type PlayerGameStats = {
+  gameId: string;
   score: number;
   kills: number;
   deaths: number;
@@ -21,6 +22,17 @@ export type PlayerStanding = {
 const DEFAULT_DB_PATH =
   process.env.STATS_DB_PATH ??
   path.join(process.cwd(), "data", "alliance-stats.sqlite");
+
+function hasColumn(
+  db: Database.Database,
+  table: string,
+  column: string
+) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+    name: string;
+  }>;
+  return columns.some((entry) => entry.name === column);
+}
 
 export class StatsStore {
   private db: Database.Database;
@@ -35,9 +47,17 @@ export class StatsStore {
 
   private migrate() {
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS players (
+        player_id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL DEFAULT 'Pilot',
+        created_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS matches (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         room_id TEXT NOT NULL,
+        game_id TEXT NOT NULL DEFAULT 'arena',
         started_at TEXT NOT NULL,
         ended_at TEXT,
         status TEXT NOT NULL DEFAULT 'active'
@@ -47,6 +67,8 @@ export class StatsStore {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         match_id INTEGER NOT NULL,
         session_id TEXT NOT NULL,
+        player_id TEXT,
+        display_name TEXT NOT NULL DEFAULT 'Pilot',
         joined_at TEXT NOT NULL,
         left_at TEXT,
         score INTEGER NOT NULL DEFAULT 0,
@@ -61,27 +83,68 @@ export class StatsStore {
         match_id INTEGER NOT NULL,
         killer_session_id TEXT,
         victim_session_id TEXT NOT NULL,
+        killer_player_id TEXT,
+        victim_player_id TEXT,
         x REAL,
         y REAL,
         created_at TEXT NOT NULL,
         FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
       );
+    `);
 
+    if (!hasColumn(this.db, "matches", "game_id")) {
+      this.db.exec(
+        `ALTER TABLE matches ADD COLUMN game_id TEXT NOT NULL DEFAULT 'arena'`
+      );
+    }
+    if (!hasColumn(this.db, "match_players", "player_id")) {
+      this.db.exec(`ALTER TABLE match_players ADD COLUMN player_id TEXT`);
+    }
+    if (!hasColumn(this.db, "match_players", "display_name")) {
+      this.db.exec(
+        `ALTER TABLE match_players ADD COLUMN display_name TEXT NOT NULL DEFAULT 'Pilot'`
+      );
+    }
+    if (!hasColumn(this.db, "kill_events", "killer_player_id")) {
+      this.db.exec(`ALTER TABLE kill_events ADD COLUMN killer_player_id TEXT`);
+    }
+    if (!hasColumn(this.db, "kill_events", "victim_player_id")) {
+      this.db.exec(`ALTER TABLE kill_events ADD COLUMN victim_player_id TEXT`);
+    }
+
+    this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_matches_room_id ON matches(room_id);
+      CREATE INDEX IF NOT EXISTS idx_matches_game_id ON matches(game_id);
       CREATE INDEX IF NOT EXISTS idx_match_players_match_id ON match_players(match_id);
+      CREATE INDEX IF NOT EXISTS idx_match_players_player_id ON match_players(player_id);
       CREATE INDEX IF NOT EXISTS idx_kill_events_match_id ON kill_events(match_id);
-      CREATE INDEX IF NOT EXISTS idx_kill_events_killer ON kill_events(killer_session_id);
-      CREATE INDEX IF NOT EXISTS idx_kill_events_victim ON kill_events(victim_session_id);
+      CREATE INDEX IF NOT EXISTS idx_kill_events_killer_player ON kill_events(killer_player_id);
+      CREATE INDEX IF NOT EXISTS idx_kill_events_victim_player ON kill_events(victim_player_id);
     `);
   }
 
-  startMatch(roomId: string): number {
+  upsertPlayer(playerId: string, displayName = "Pilot") {
+    const now = new Date().toISOString();
+    const name = displayName.trim().slice(0, 24) || "Pilot";
+    this.db
+      .prepare(
+        `INSERT INTO players (player_id, display_name, created_at, last_seen_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(player_id) DO UPDATE SET
+           display_name = excluded.display_name,
+           last_seen_at = excluded.last_seen_at`
+      )
+      .run(playerId, name, now, now);
+    return name;
+  }
+
+  startMatch(roomId: string, gameId = "arena"): number {
     const result = this.db
       .prepare(
-        `INSERT INTO matches (room_id, started_at, status)
-         VALUES (?, ?, 'active')`
+        `INSERT INTO matches (room_id, game_id, started_at, status)
+         VALUES (?, ?, ?, 'active')`
       )
-      .run(roomId, new Date().toISOString());
+      .run(roomId, gameId, new Date().toISOString());
 
     return Number(result.lastInsertRowid);
   }
@@ -96,16 +159,25 @@ export class StatsStore {
       .run(new Date().toISOString(), matchId);
   }
 
-  playerJoined(matchId: number, sessionId: string) {
+  playerJoined(
+    matchId: number,
+    sessionId: string,
+    playerId: string,
+    displayName = "Pilot"
+  ) {
+    const name = this.upsertPlayer(playerId, displayName);
     this.db
       .prepare(
-        `INSERT INTO match_players (match_id, session_id, joined_at)
-         VALUES (?, ?, ?)
+        `INSERT INTO match_players
+          (match_id, session_id, player_id, display_name, joined_at)
+         VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(match_id, session_id) DO UPDATE SET
            left_at = NULL,
+           player_id = excluded.player_id,
+           display_name = excluded.display_name,
            joined_at = excluded.joined_at`
       )
-      .run(matchId, sessionId, new Date().toISOString());
+      .run(matchId, sessionId, playerId, name, new Date().toISOString());
   }
 
   playerLeft(
@@ -147,98 +219,115 @@ export class StatsStore {
     matchId: number;
     killerSessionId?: string;
     victimSessionId: string;
+    killerPlayerId?: string;
+    victimPlayerId?: string;
     x?: number;
     y?: number;
   }) {
     this.db
       .prepare(
         `INSERT INTO kill_events
-          (match_id, killer_session_id, victim_session_id, x, y, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
+          (match_id, killer_session_id, victim_session_id,
+           killer_player_id, victim_player_id, x, y, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.matchId,
         input.killerSessionId ?? null,
         input.victimSessionId,
+        input.killerPlayerId ?? null,
+        input.victimPlayerId ?? null,
         input.x ?? null,
         input.y ?? null,
         new Date().toISOString()
       );
   }
 
-  getSummary() {
+  getSummary(gameId?: string) {
     const totals = this.db
       .prepare(
         `SELECT
-           (SELECT COUNT(*) FROM matches) AS matches,
-           (SELECT COUNT(*) FROM matches WHERE status = 'active') AS activeMatches,
-           (SELECT COUNT(*) FROM match_players) AS playerSessions,
-           (SELECT COUNT(*) FROM kill_events) AS kills,
-           (SELECT COALESCE(SUM(score), 0) FROM match_players) AS totalScore`
+           (SELECT COUNT(*) FROM matches ${gameId ? "WHERE game_id = ?" : ""}) AS matches,
+           (SELECT COUNT(*) FROM matches WHERE status = 'active' ${
+             gameId ? "AND game_id = ?" : ""
+           }) AS activeMatches,
+           (SELECT COUNT(*) FROM match_players mp
+              JOIN matches m ON m.id = mp.match_id
+              ${gameId ? "WHERE m.game_id = ?" : ""}) AS playerSessions,
+           (SELECT COUNT(DISTINCT player_id) FROM match_players mp
+              JOIN matches m ON m.id = mp.match_id
+              WHERE mp.player_id IS NOT NULL ${
+                gameId ? "AND m.game_id = ?" : ""
+              }) AS uniquePlayers,
+           (SELECT COUNT(*) FROM kill_events ke
+              JOIN matches m ON m.id = ke.match_id
+              ${gameId ? "WHERE m.game_id = ?" : ""}) AS kills,
+           (SELECT COALESCE(SUM(mp.score), 0) FROM match_players mp
+              JOIN matches m ON m.id = mp.match_id
+              ${gameId ? "WHERE m.game_id = ?" : ""}) AS totalScore`
       )
-      .get() as {
+      .get(
+        ...(gameId
+          ? [gameId, gameId, gameId, gameId, gameId, gameId]
+          : [])
+      ) as {
       matches: number;
       activeMatches: number;
       playerSessions: number;
+      uniquePlayers: number;
       kills: number;
       totalScore: number;
     };
 
-    const mostDangerous = this.db
-      .prepare(
-        `SELECT session_id AS sessionId,
-                SUM(kills) AS kills,
-                SUM(deaths) AS deaths,
-                SUM(score) AS score,
-                COUNT(*) AS matchesPlayed
-         FROM match_players
-         GROUP BY session_id
-         ORDER BY kills DESC, score DESC
-         LIMIT 5`
-      )
-      .all() as PlayerStanding[];
+    const standingQuery = (orderBy: string) =>
+      this.db
+        .prepare(
+          `SELECT
+              COALESCE(mp.player_id, mp.session_id) AS playerId,
+              COALESCE(MAX(mp.display_name), 'Pilot') AS displayName,
+              SUM(mp.kills) AS kills,
+              SUM(mp.deaths) AS deaths,
+              SUM(mp.score) AS score,
+              COUNT(*) AS matchesPlayed
+           FROM match_players mp
+           JOIN matches m ON m.id = mp.match_id
+           ${gameId ? "WHERE m.game_id = ?" : ""}
+           GROUP BY COALESCE(mp.player_id, mp.session_id)
+           ORDER BY ${orderBy}
+           LIMIT 8`
+        )
+        .all(...(gameId ? [gameId] : [])) as PlayerStanding[];
 
-    const mostDestroyed = this.db
-      .prepare(
-        `SELECT session_id AS sessionId,
-                SUM(kills) AS kills,
-                SUM(deaths) AS deaths,
-                SUM(score) AS score,
-                COUNT(*) AS matchesPlayed
-         FROM match_players
-         GROUP BY session_id
-         ORDER BY deaths DESC, kills ASC
-         LIMIT 5`
-      )
-      .all() as PlayerStanding[];
+    const mostDangerous = standingQuery("kills DESC, score DESC");
+    const mostDestroyed = standingQuery("deaths DESC, kills ASC");
 
     const recentMatches = this.db
       .prepare(
-        `SELECT id, room_id AS roomId, started_at AS startedAt,
+        `SELECT id, room_id AS roomId, game_id AS gameId, started_at AS startedAt,
                 ended_at AS endedAt, status
          FROM matches
+         ${gameId ? "WHERE game_id = ?" : ""}
          ORDER BY id DESC
          LIMIT 10`
       )
-      .all() as Array<{
-      id: number;
-      roomId: string;
-      startedAt: string;
-      endedAt: string | null;
-      status: string;
-    }>;
+      .all(...(gameId ? [gameId] : []));
 
     const recentKills = this.db
       .prepare(
-        `SELECT id, match_id AS matchId,
-                killer_session_id AS killerSessionId,
-                victim_session_id AS victimSessionId,
-                x, y, created_at AS createdAt
-         FROM kill_events
-         ORDER BY id DESC
+        `SELECT ke.id, ke.match_id AS matchId,
+                ke.killer_session_id AS killerSessionId,
+                ke.victim_session_id AS victimSessionId,
+                ke.killer_player_id AS killerPlayerId,
+                ke.victim_player_id AS victimPlayerId,
+                ke.x, ke.y, ke.created_at AS createdAt,
+                m.game_id AS gameId
+         FROM kill_events ke
+         JOIN matches m ON m.id = ke.match_id
+         ${gameId ? "WHERE m.game_id = ?" : ""}
+         ORDER BY ke.id DESC
          LIMIT 20`
       )
-      .all();
+      .all(...(gameId ? [gameId] : []));
 
     return {
       totals,
@@ -246,6 +335,80 @@ export class StatsStore {
       mostDestroyed,
       recentMatches,
       recentKills,
+    };
+  }
+
+  getPlayerHistory(playerId: string) {
+    const player = this.db
+      .prepare(
+        `SELECT player_id AS playerId, display_name AS displayName,
+                created_at AS createdAt, last_seen_at AS lastSeenAt
+         FROM players WHERE player_id = ?`
+      )
+      .get(playerId) as
+      | {
+          playerId: string;
+          displayName: string;
+          createdAt: string;
+          lastSeenAt: string;
+        }
+      | undefined;
+
+    const lifetime = this.db
+      .prepare(
+        `SELECT
+            COALESCE(SUM(score), 0) AS score,
+            COALESCE(SUM(kills), 0) AS kills,
+            COALESCE(SUM(deaths), 0) AS deaths,
+            COUNT(*) AS matchesPlayed
+         FROM match_players
+         WHERE player_id = ?`
+      )
+      .get(playerId) as {
+      score: number;
+      kills: number;
+      deaths: number;
+      matchesPlayed: number;
+    };
+
+    const byGame = this.db
+      .prepare(
+        `SELECT m.game_id AS gameId,
+                COALESCE(SUM(mp.score), 0) AS score,
+                COALESCE(SUM(mp.kills), 0) AS kills,
+                COALESCE(SUM(mp.deaths), 0) AS deaths,
+                COUNT(*) AS matchesPlayed
+         FROM match_players mp
+         JOIN matches m ON m.id = mp.match_id
+         WHERE mp.player_id = ?
+         GROUP BY m.game_id
+         ORDER BY score DESC`
+      )
+      .all(playerId) as PlayerGameStats[];
+
+    const recentMatches = this.db
+      .prepare(
+        `SELECT m.id AS matchId, m.game_id AS gameId, m.room_id AS roomId,
+                m.started_at AS startedAt, m.ended_at AS endedAt, m.status,
+                mp.score, mp.kills, mp.deaths
+         FROM match_players mp
+         JOIN matches m ON m.id = mp.match_id
+         WHERE mp.player_id = ?
+         ORDER BY m.id DESC
+         LIMIT 20`
+      )
+      .all(playerId);
+
+    return {
+      player: player ?? {
+        playerId,
+        displayName: "Pilot",
+        createdAt: null,
+        lastSeenAt: null,
+      },
+      lifetime,
+      byGame,
+      recentMatches,
     };
   }
 }

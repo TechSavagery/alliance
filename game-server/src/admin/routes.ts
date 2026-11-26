@@ -1,9 +1,23 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { matchMaker } from "colyseus";
-import type { GameRoom } from "../rooms/GameRoom";
+import { GAME_TITLES } from "@alliance/shared";
 import { getStatsStore } from "../persistence/statsStore";
 
+type AdminCapableRoom = {
+  roomId: string;
+  clients: { length: number };
+  getAdminSnapshot?: () => Record<string, unknown>;
+  adminResetScore?: (sessionId: string) => boolean;
+  adminResetAllScores?: () => void;
+  adminForceRespawn?: (sessionId: string) => boolean;
+  adminKick?: (sessionId: string) => boolean;
+};
+
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "alliance-dev";
+const ROOM_NAMES = [
+  ...GAME_TITLES.map((title) => title.roomName),
+  "game_room",
+];
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const token =
@@ -18,8 +32,8 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-function getRoom(roomId: string): GameRoom | undefined {
-  return matchMaker.getLocalRoomById(roomId) as GameRoom | undefined;
+function getRoom(roomId: string): AdminCapableRoom | undefined {
+  return matchMaker.getLocalRoomById(roomId) as AdminCapableRoom | undefined;
 }
 
 export function createAdminRouter() {
@@ -27,10 +41,16 @@ export function createAdminRouter() {
 
   router.use(requireAdmin);
 
-  router.get("/rooms", async (_req, res) => {
-    const rooms = await matchMaker.query({ name: "game_room" });
+  router.get("/games", (_req, res) => {
+    res.json({ games: GAME_TITLES });
+  });
 
-    const payload = rooms.map((listing) => {
+  router.get("/rooms", async (_req, res) => {
+    const listings = (
+      await Promise.all(ROOM_NAMES.map((name) => matchMaker.query({ name })))
+    ).flat();
+
+    const payload = listings.map((listing) => {
       const room = getRoom(listing.roomId);
       const snapshot = room?.getAdminSnapshot?.() ?? null;
 
@@ -41,12 +61,18 @@ export function createAdminRouter() {
         locked: listing.locked,
         private: listing.private,
         maxClients: listing.maxClients,
-        players: snapshot?.players ?? [],
-        bulletCount: snapshot?.bulletCount ?? 0,
+        players: (snapshot as { players?: unknown[] } | null)?.players ?? [],
+        bulletCount:
+          (snapshot as { bulletCount?: number } | null)?.bulletCount ?? 0,
+        enemyCount:
+          (snapshot as { enemyCount?: number } | null)?.enemyCount ?? 0,
+        wave: (snapshot as { wave?: number } | null)?.wave ?? null,
+        matchId: (snapshot as { matchId?: number } | null)?.matchId ?? null,
+        gameId: (snapshot as { gameId?: string } | null)?.gameId ?? listing.name,
       };
     });
 
-    res.json({ rooms: payload, adminTokenHint: "x-admin-token header or ?token=" });
+    res.json({ rooms: payload, games: GAME_TITLES });
   });
 
   router.get("/rooms/:roomId", (req, res) => {
@@ -59,13 +85,13 @@ export function createAdminRouter() {
     res.json({
       roomId: room.roomId,
       clients: room.clients.length,
-      ...room.getAdminSnapshot(),
+      ...room.getAdminSnapshot?.(),
     });
   });
 
   router.post("/rooms/:roomId/players/:sessionId/reset-score", (req, res) => {
     const room = getRoom(req.params.roomId);
-    if (!room) {
+    if (!room?.adminResetScore) {
       res.status(404).json({ error: "Room not found" });
       return;
     }
@@ -76,23 +102,23 @@ export function createAdminRouter() {
       return;
     }
 
-    res.json({ ok: true, ...room.getAdminSnapshot() });
+    res.json({ ok: true, ...room.getAdminSnapshot?.() });
   });
 
   router.post("/rooms/:roomId/reset-scores", (req, res) => {
     const room = getRoom(req.params.roomId);
-    if (!room) {
+    if (!room?.adminResetAllScores) {
       res.status(404).json({ error: "Room not found" });
       return;
     }
 
     room.adminResetAllScores();
-    res.json({ ok: true, ...room.getAdminSnapshot() });
+    res.json({ ok: true, ...room.getAdminSnapshot?.() });
   });
 
   router.post("/rooms/:roomId/players/:sessionId/respawn", (req, res) => {
     const room = getRoom(req.params.roomId);
-    if (!room) {
+    if (!room?.adminForceRespawn) {
       res.status(404).json({ error: "Room not found" });
       return;
     }
@@ -103,12 +129,12 @@ export function createAdminRouter() {
       return;
     }
 
-    res.json({ ok: true, ...room.getAdminSnapshot() });
+    res.json({ ok: true, ...room.getAdminSnapshot?.() });
   });
 
   router.post("/rooms/:roomId/players/:sessionId/kick", (req, res) => {
     const room = getRoom(req.params.roomId);
-    if (!room) {
+    if (!room?.adminKick) {
       res.status(404).json({ error: "Room not found" });
       return;
     }
@@ -119,11 +145,17 @@ export function createAdminRouter() {
       return;
     }
 
-    res.json({ ok: true, ...room.getAdminSnapshot() });
+    res.json({ ok: true, ...room.getAdminSnapshot?.() });
   });
 
-  router.get("/stats/summary", (_req, res) => {
-    res.json(getStatsStore().getSummary());
+  router.get("/stats/summary", (req, res) => {
+    const gameId =
+      typeof req.query.gameId === "string" ? req.query.gameId : undefined;
+    res.json(getStatsStore().getSummary(gameId));
+  });
+
+  router.get("/players/:playerId", (req, res) => {
+    res.json(getStatsStore().getPlayerHistory(req.params.playerId));
   });
 
   return router;

@@ -11,6 +11,7 @@ import {
   RECONCILE_THRESHOLD,
   SimulatedPlayer,
 } from "@alliance/shared";
+import { getJoinOptions } from "@/lib/playerIdentity";
 import { COLYSEUS_URL, GAME_HEIGHT, GAME_WIDTH } from "./config";
 
 type PlayerView = SimulatedPlayer & {
@@ -121,7 +122,7 @@ export class GameScene extends Phaser.Scene {
 
   private async connectToRoom() {
     try {
-      this.room = await this.client.joinOrCreate("game_room");
+      this.room = await this.client.joinOrCreate("arena_room", getJoinOptions());
       const callbacks = Callbacks.get(this.room) as GameCallbacks;
 
       callbacks.onAdd("players", (player, sessionId) => {

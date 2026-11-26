@@ -28,9 +28,11 @@ export class GameRoom extends Room {
   private bulletId = 0;
   private matchId: number | null = null;
   private stats = getStatsStore();
+  private playerIds = new Map<string, string>();
+  private displayNames = new Map<string, string>();
 
   onCreate() {
-    this.matchId = this.stats.startMatch(this.roomId);
+    this.matchId = this.stats.startMatch(this.roomId, "arena");
     this.setSimulationInterval((deltaTime) => this.update(deltaTime), TICK_MS);
 
     this.onMessage("input", (client, payload: InputPayload) => {
@@ -46,15 +48,31 @@ export class GameRoom extends Room {
     });
   }
 
-  onJoin(client: Client) {
+  onJoin(client: Client, options: { playerId?: string; displayName?: string } = {}) {
+    const playerId =
+      typeof options.playerId === "string" && options.playerId.trim()
+        ? options.playerId.trim().slice(0, 64)
+        : `anon_${client.sessionId}`;
+    const displayName =
+      typeof options.displayName === "string" && options.displayName.trim()
+        ? options.displayName.trim().slice(0, 24)
+        : "Pilot";
+
     const player = new Player();
     this.spawnPlayer(player);
 
     this.state.players.set(client.sessionId, player);
     this.inputs.set(client.sessionId, defaultInput());
+    this.playerIds.set(client.sessionId, playerId);
+    this.displayNames.set(client.sessionId, displayName);
 
     if (this.matchId !== null) {
-      this.stats.playerJoined(this.matchId, client.sessionId);
+      this.stats.playerJoined(
+        this.matchId,
+        client.sessionId,
+        playerId,
+        displayName
+      );
     }
   }
 
@@ -73,6 +91,8 @@ export class GameRoom extends Room {
     this.lastShot.delete(client.sessionId);
     this.respawnAt.delete(client.sessionId);
     this.invulnerableUntil.delete(client.sessionId);
+    this.playerIds.delete(client.sessionId);
+    this.displayNames.delete(client.sessionId);
   }
 
   onDispose() {
@@ -180,6 +200,8 @@ export class GameRoom extends Room {
         matchId: this.matchId,
         killerSessionId: killerId,
         victimSessionId: victimId,
+        killerPlayerId: killerId ? this.playerIds.get(killerId) : undefined,
+        victimPlayerId: this.playerIds.get(victimId),
         x: victim.x,
         y: victim.y,
       });
@@ -234,6 +256,8 @@ export class GameRoom extends Room {
   getAdminSnapshot() {
     const players: Array<{
       sessionId: string;
+      playerId?: string;
+      displayName?: string;
       score: number;
       kills: number;
       deaths: number;
@@ -245,6 +269,8 @@ export class GameRoom extends Room {
     this.state.players.forEach((player, sessionId) => {
       players.push({
         sessionId,
+        playerId: this.playerIds.get(sessionId),
+        displayName: this.displayNames.get(sessionId),
         score: player.score,
         kills: player.kills,
         deaths: player.deaths,
@@ -258,6 +284,7 @@ export class GameRoom extends Room {
 
     return {
       matchId: this.matchId,
+      gameId: "arena",
       players,
       bulletCount: this.state.bullets.size,
     };
