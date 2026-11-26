@@ -26,8 +26,33 @@ type AdminRoom = {
   clients: number;
   locked?: boolean;
   maxClients?: number;
+  matchId?: number | null;
   players: AdminPlayer[];
   bulletCount: number;
+};
+
+type StatsSummary = {
+  totals: {
+    matches: number;
+    activeMatches: number;
+    playerSessions: number;
+    kills: number;
+    totalScore: number;
+  };
+  mostDangerous: Array<{
+    sessionId: string;
+    kills: number;
+    deaths: number;
+    score: number;
+    matchesPlayed: number;
+  }>;
+  mostDestroyed: Array<{
+    sessionId: string;
+    kills: number;
+    deaths: number;
+    score: number;
+    matchesPlayed: number;
+  }>;
 };
 
 const DEFAULT_TOKEN = "alliance-dev";
@@ -35,6 +60,7 @@ const DEFAULT_TOKEN = "alliance-dev";
 export default function AdminPage() {
   const [token, setToken] = useState(DEFAULT_TOKEN);
   const [rooms, setRooms] = useState<AdminRoom[]>([]);
+  const [summary, setSummary] = useState<StatsSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -44,17 +70,28 @@ export default function AdminPage() {
   const fetchRooms = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${apiBase}/rooms?token=${encodeURIComponent(token)}`, {
-        headers: { "x-admin-token": token },
-      });
+      const headers = { "x-admin-token": token };
+      const [roomsResponse, summaryResponse] = await Promise.all([
+        fetch(`${apiBase}/rooms?token=${encodeURIComponent(token)}`, { headers }),
+        fetch(`${apiBase}/stats/summary?token=${encodeURIComponent(token)}`, {
+          headers,
+        }),
+      ]);
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || `HTTP ${response.status}`);
+      if (!roomsResponse.ok) {
+        const body = await roomsResponse.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${roomsResponse.status}`);
       }
 
-      const data = await response.json();
+      if (!summaryResponse.ok) {
+        const body = await summaryResponse.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${summaryResponse.status}`);
+      }
+
+      const data = await roomsResponse.json();
+      const summaryData = await summaryResponse.json();
       setRooms(data.rooms ?? []);
+      setSummary(summaryData);
       setError(null);
       setLastUpdated(new Date().toLocaleTimeString());
     } catch (err) {
@@ -150,6 +187,66 @@ export default function AdminPage() {
           </form>
 
           {error && <p style={styles.error}>{error}</p>}
+
+          {summary && (
+            <section style={styles.summaryGrid}>
+              <div style={styles.statCard}>
+                <p style={styles.statLabel}>Matches stored</p>
+                <p style={styles.statValue}>{summary.totals.matches}</p>
+              </div>
+              <div style={styles.statCard}>
+                <p style={styles.statLabel}>Kills logged</p>
+                <p style={styles.statValue}>{summary.totals.kills}</p>
+              </div>
+              <div style={styles.statCard}>
+                <p style={styles.statLabel}>Player sessions</p>
+                <p style={styles.statValue}>{summary.totals.playerSessions}</p>
+              </div>
+              <div style={styles.statCard}>
+                <p style={styles.statLabel}>Total score</p>
+                <p style={styles.statValue}>{summary.totals.totalScore}</p>
+              </div>
+            </section>
+          )}
+
+          {summary && (
+            <section style={styles.leaderGrid}>
+              <div style={styles.roomCard}>
+                <h2 style={styles.sectionTitle}>Most dangerous (persisted)</h2>
+                {summary.mostDangerous.length === 0 ? (
+                  <p style={styles.empty}>No kill data yet.</p>
+                ) : (
+                  <ul style={styles.list}>
+                    {summary.mostDangerous.map((player) => (
+                      <li key={`danger-${player.sessionId}`} style={styles.listItem}>
+                        <code>{player.sessionId.slice(0, 8)}</code>
+                        <span>
+                          {player.kills}K / {player.deaths}D · {player.score} pts
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div style={styles.roomCard}>
+                <h2 style={styles.sectionTitle}>Most destroyed (persisted)</h2>
+                {summary.mostDestroyed.length === 0 ? (
+                  <p style={styles.empty}>No death data yet.</p>
+                ) : (
+                  <ul style={styles.list}>
+                    {summary.mostDestroyed.map((player) => (
+                      <li key={`destroyed-${player.sessionId}`} style={styles.listItem}>
+                        <code>{player.sessionId.slice(0, 8)}</code>
+                        <span>
+                          {player.deaths}D / {player.kills}K · {player.score} pts
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+          )}
 
           {rooms.length === 0 && !error && (
             <p style={styles.empty}>
@@ -381,6 +478,52 @@ const styles: Record<string, CSSProperties> = {
   roomList: {
     display: "grid",
     gap: 16,
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  leaderGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    border: "1px solid #1f3a4d",
+    borderRadius: 12,
+    padding: 14,
+    background: "rgba(8, 20, 32, 0.55)",
+  },
+  statLabel: {
+    margin: 0,
+    color: "#8aa6b8",
+    fontSize: 12,
+  },
+  statValue: {
+    margin: "6px 0 0",
+    fontSize: 28,
+    fontFamily: "monospace",
+  },
+  sectionTitle: {
+    margin: "0 0 10px",
+    fontSize: 16,
+  },
+  list: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "grid",
+    gap: 8,
+  },
+  listItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    color: "#cfe7f5",
+    fontSize: 13,
   },
   roomCard: {
     border: "1px solid #1f3a4d",

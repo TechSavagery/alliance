@@ -15,6 +15,7 @@ import {
   TICK_MS,
 } from "@alliance/shared";
 import { Bullet, GameState, Player } from "@alliance/shared/schema";
+import { getStatsStore } from "../persistence/statsStore";
 
 export class GameRoom extends Room {
   state = new GameState();
@@ -25,8 +26,11 @@ export class GameRoom extends Room {
   private respawnAt = new Map<string, number>();
   private invulnerableUntil = new Map<string, number>();
   private bulletId = 0;
+  private matchId: number | null = null;
+  private stats = getStatsStore();
 
   onCreate() {
+    this.matchId = this.stats.startMatch(this.roomId);
     this.setSimulationInterval((deltaTime) => this.update(deltaTime), TICK_MS);
 
     this.onMessage("input", (client, payload: InputPayload) => {
@@ -48,14 +52,42 @@ export class GameRoom extends Room {
 
     this.state.players.set(client.sessionId, player);
     this.inputs.set(client.sessionId, defaultInput());
+
+    if (this.matchId !== null) {
+      this.stats.playerJoined(this.matchId, client.sessionId);
+    }
   }
 
   onLeave(client: Client) {
+    const player = this.state.players.get(client.sessionId);
+    if (player && this.matchId !== null) {
+      this.stats.playerLeft(this.matchId, client.sessionId, {
+        score: player.score,
+        kills: player.kills,
+        deaths: player.deaths,
+      });
+    }
+
     this.state.players.delete(client.sessionId);
     this.inputs.delete(client.sessionId);
     this.lastShot.delete(client.sessionId);
     this.respawnAt.delete(client.sessionId);
     this.invulnerableUntil.delete(client.sessionId);
+  }
+
+  onDispose() {
+    if (this.matchId === null) return;
+
+    this.state.players.forEach((player, sessionId) => {
+      this.stats.updatePlayerStats(this.matchId!, sessionId, {
+        score: player.score,
+        kills: player.kills,
+        deaths: player.deaths,
+      });
+    });
+
+    this.stats.endMatch(this.matchId);
+    this.matchId = null;
   }
 
   private update(deltaTime: number) {
@@ -128,13 +160,35 @@ export class GameRoom extends Room {
     victim.vy = 0;
     this.respawnAt.set(victimId, Date.now() + RESPAWN_MS);
 
-    if (!killerId) return;
+    if (killerId) {
+      const killer = this.state.players.get(killerId);
+      if (killer) {
+        killer.kills += 1;
+        killer.score += KILL_SCORE;
+        if (this.matchId !== null) {
+          this.stats.updatePlayerStats(this.matchId, killerId, {
+            score: killer.score,
+            kills: killer.kills,
+            deaths: killer.deaths,
+          });
+        }
+      }
+    }
 
-    const killer = this.state.players.get(killerId);
-    if (!killer) return;
-
-    killer.kills += 1;
-    killer.score += KILL_SCORE;
+    if (this.matchId !== null) {
+      this.stats.recordKill({
+        matchId: this.matchId,
+        killerSessionId: killerId,
+        victimSessionId: victimId,
+        x: victim.x,
+        y: victim.y,
+      });
+      this.stats.updatePlayerStats(this.matchId, victimId, {
+        score: victim.score,
+        kills: victim.kills,
+        deaths: victim.deaths,
+      });
+    }
   }
 
   private respawnPlayer(sessionId: string, player: Player) {
@@ -203,6 +257,7 @@ export class GameRoom extends Room {
     players.sort((a, b) => b.score - a.score);
 
     return {
+      matchId: this.matchId,
       players,
       bulletCount: this.state.bullets.size,
     };
@@ -214,14 +269,28 @@ export class GameRoom extends Room {
     player.score = 0;
     player.kills = 0;
     player.deaths = 0;
+    if (this.matchId !== null) {
+      this.stats.updatePlayerStats(this.matchId, sessionId, {
+        score: 0,
+        kills: 0,
+        deaths: 0,
+      });
+    }
     return true;
   }
 
   adminResetAllScores() {
-    this.state.players.forEach((player) => {
+    this.state.players.forEach((player, sessionId) => {
       player.score = 0;
       player.kills = 0;
       player.deaths = 0;
+      if (this.matchId !== null) {
+        this.stats.updatePlayerStats(this.matchId, sessionId, {
+          score: 0,
+          kills: 0,
+          deaths: 0,
+        });
+      }
     });
   }
 

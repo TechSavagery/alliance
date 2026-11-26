@@ -1,6 +1,14 @@
 import assert from "assert";
+import path from "path";
+import os from "os";
 import { ColyseusTestServer, boot } from "@colyseus/testing";
 import { KILL_SCORE, MAP_HEIGHT, MAP_WIDTH } from "@alliance/shared";
+
+process.env.STATS_DB_PATH = path.join(
+  os.tmpdir(),
+  `alliance-stats-test-${Date.now()}.sqlite`
+);
+
 import appConfig from "../src/app.config";
 
 describe("Alliance game server", () => {

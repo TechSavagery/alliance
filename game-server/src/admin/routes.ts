@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { matchMaker } from "colyseus";
 import type { GameRoom } from "../rooms/GameRoom";
+import { getStatsStore } from "../persistence/statsStore";
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "alliance-dev";
 
@@ -119,6 +120,10 @@ export function createAdminRouter() {
     }
 
     res.json({ ok: true, ...room.getAdminSnapshot() });
+  });
+
+  router.get("/stats/summary", (_req, res) => {
+    res.json(getStatsStore().getSummary());
   });
 
   return router;
