@@ -25,6 +25,9 @@ export default function Home() {
             <Link href="/game" className={styles.primaryButton}>
               Launch game
             </Link>
+            <Link href="/admin" className={styles.secondaryButton}>
+              Admin panel
+            </Link>
             <a
               href="http://localhost:2567/colyseus"
               target="_blank"

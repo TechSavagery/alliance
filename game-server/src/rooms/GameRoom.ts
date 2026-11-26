@@ -176,4 +176,66 @@ export class GameRoom extends Room {
     this.state.bullets.set(bulletId, bullet);
     this.bulletOwners.set(bulletId, sessionId);
   }
+
+  getAdminSnapshot() {
+    const players: Array<{
+      sessionId: string;
+      score: number;
+      kills: number;
+      deaths: number;
+      alive: boolean;
+      x: number;
+      y: number;
+    }> = [];
+
+    this.state.players.forEach((player, sessionId) => {
+      players.push({
+        sessionId,
+        score: player.score,
+        kills: player.kills,
+        deaths: player.deaths,
+        alive: player.alive,
+        x: Math.round(player.x),
+        y: Math.round(player.y),
+      });
+    });
+
+    players.sort((a, b) => b.score - a.score);
+
+    return {
+      players,
+      bulletCount: this.state.bullets.size,
+    };
+  }
+
+  adminResetScore(sessionId: string) {
+    const player = this.state.players.get(sessionId);
+    if (!player) return false;
+    player.score = 0;
+    player.kills = 0;
+    player.deaths = 0;
+    return true;
+  }
+
+  adminResetAllScores() {
+    this.state.players.forEach((player) => {
+      player.score = 0;
+      player.kills = 0;
+      player.deaths = 0;
+    });
+  }
+
+  adminForceRespawn(sessionId: string) {
+    const player = this.state.players.get(sessionId);
+    if (!player) return false;
+    this.respawnPlayer(sessionId, player);
+    return true;
+  }
+
+  adminKick(sessionId: string) {
+    const client = this.clients.find((c) => c.sessionId === sessionId);
+    if (!client) return false;
+    client.leave(4000);
+    return true;
+  }
 }

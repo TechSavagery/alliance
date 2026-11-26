@@ -1,6 +1,7 @@
 import cors from "cors";
 import { defineRoom, defineServer } from "colyseus";
 import { monitor } from "@colyseus/monitor";
+import { createAdminRouter } from "./admin/routes";
 import { GameRoom } from "./rooms/GameRoom";
 
 const server = defineServer({
@@ -12,6 +13,7 @@ const server = defineServer({
     app.get("/", (_req, res) => {
       res.send("Alliance game server — ready for takeoff.");
     });
+    app.use("/admin/api", createAdminRouter());
     app.use("/colyseus", monitor());
   },
 });
