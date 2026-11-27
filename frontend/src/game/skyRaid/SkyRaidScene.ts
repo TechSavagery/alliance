@@ -80,6 +80,36 @@ export class SkyRaidScene extends Phaser.Scene {
     for (let i = 0; i < 20; i++) {
       this.load.image(`ship-${i}`, `/ships/ship-${i}.png`);
     }
+    
+    this.load.on('filecomplete-image', (key: string) => {
+      if (key.startsWith('ship-')) {
+        const texture = this.textures.get(key);
+        if (texture) {
+          const canvas = this.textures.createCanvas(`${key}-processed`, texture.getSourceImage().width, texture.getSourceImage().height);
+          if (canvas) {
+            const ctx = canvas.context;
+            const img = texture.getSourceImage() as HTMLImageElement;
+            ctx.drawImage(img, 0, 0);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+              
+              if (g > 200 && r < 100 && b < 100) {
+                data[i + 3] = 0;
+              }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            canvas.refresh();
+          }
+        }
+      }
+    });
   }
 
   create() {
@@ -148,7 +178,8 @@ export class SkyRaidScene extends Phaser.Scene {
           this.updateReviveProgress(sessionId, view);
           if (isLocal) {
             this.updateHud(view);
-            if (!view.alive) {
+            const wasAlive = this.localPredicted.x !== 0 || this.localPredicted.y !== 0;
+            if (!view.alive || (!wasAlive && view.alive)) {
               this.localPredicted = { x: view.x, y: view.y };
             }
           }
@@ -281,22 +312,21 @@ export class SkyRaidScene extends Phaser.Scene {
 
   private createPlane(x: number, y: number, seat: number, isLocal: boolean) {
     const container = this.add.container(x, y);
-    const shipKey = `ship-${this.selectedShip}`;
+    const shipKey = `ship-${this.selectedShip}-processed`;
     const color = SKY_PLAYER_COLORS[seat % SKY_PLAYER_COLORS.length];
     
     if (this.textures.exists(shipKey)) {
       const ship = this.add.image(0, 0, shipKey);
-      ship.setScale(0.5);
+      ship.setScale(0.4);
       
-      const graphics = this.add.graphics();
-      graphics.lineStyle(2, color, 1);
+      const outline = this.add.image(0, 0, shipKey);
+      outline.setScale(0.4);
+      outline.setTint(color);
+      outline.setAlpha(0.6);
       
-      const bounds = ship.getBounds();
-      const width = bounds.width * 0.5;
-      const height = bounds.height * 0.5;
-      graphics.strokeRect(-width / 2, -height / 2, width, height);
+      const fxOutline = outline.preFX?.addGlow(color, 4, 0, false, 0.3, 10);
       
-      container.add([ship, graphics]);
+      container.add([outline, ship]);
     } else {
       const body = this.add.triangle(0, 0, 0, -14, 10, 12, -10, 12, color);
       const wing = this.add.rectangle(0, 2, 22, 4, color, 0.85);
