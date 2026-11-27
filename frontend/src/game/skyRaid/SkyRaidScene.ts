@@ -65,9 +65,21 @@ export class SkyRaidScene extends Phaser.Scene {
   private scrollOffset = 0;
   private stars?: Phaser.GameObjects.Graphics;
   private inputPayload: SkyRaidInput = defaultSkyRaidInput();
+  private selectedShip = 0;
 
   constructor() {
     super("SkyRaidScene");
+  }
+
+  preload() {
+    const shipId = typeof window !== "undefined" 
+      ? parseInt(window.localStorage.getItem("skyRaid.selectedShip") || "0", 10)
+      : 0;
+    this.selectedShip = shipId;
+    
+    for (let i = 0; i < 20; i++) {
+      this.load.image(`ship-${i}`, `/ships/ship-${i}.png`);
+    }
   }
 
   create() {
@@ -264,11 +276,24 @@ export class SkyRaidScene extends Phaser.Scene {
   }
 
   private createPlane(x: number, y: number, seat: number, isLocal: boolean) {
-    const color = SKY_PLAYER_COLORS[seat % SKY_PLAYER_COLORS.length];
     const container = this.add.container(x, y);
-    const body = this.add.triangle(0, 0, 0, -14, 10, 12, -10, 12, color);
-    const wing = this.add.rectangle(0, 2, 22, 4, color, 0.85);
-    container.add([wing, body]);
+    const shipKey = `ship-${this.selectedShip}`;
+    
+    if (this.textures.exists(shipKey)) {
+      const ship = this.add.image(0, 0, shipKey);
+      ship.setScale(0.5);
+      
+      const color = SKY_PLAYER_COLORS[seat % SKY_PLAYER_COLORS.length];
+      ship.setTint(color);
+      
+      container.add(ship);
+    } else {
+      const color = SKY_PLAYER_COLORS[seat % SKY_PLAYER_COLORS.length];
+      const body = this.add.triangle(0, 0, 0, -14, 10, 12, -10, 12, color);
+      const wing = this.add.rectangle(0, 2, 22, 4, color, 0.85);
+      container.add([wing, body]);
+    }
+    
     container.setDepth(isLocal ? 6 : 5);
     return container;
   }

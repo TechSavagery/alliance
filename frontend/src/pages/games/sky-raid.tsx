@@ -4,13 +4,19 @@ import { useCallback, useState } from "react";
 import PhaserGame from "@/components/PhaserGame";
 import { setSkyRaidGameMode } from "@/lib/playerIdentity";
 
+const SHIP_COUNT = 20;
+
 export default function SkyRaidGamePage() {
   const [gameMode, setGameMode] = useState<"coop" | "ffa">("coop");
+  const [selectedShip, setSelectedShip] = useState(0);
   const [started, setStarted] = useState(false);
   const loader = useCallback(() => import("@/game/skyRaid/SkyRaidScene"), []);
 
   const handleStart = () => {
     setSkyRaidGameMode(gameMode);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("skyRaid.selectedShip", selectedShip.toString());
+    }
     setStarted(true);
   };
 
@@ -60,6 +66,34 @@ export default function SkyRaidGamePage() {
                   <div style={{ fontSize: 12, opacity: 0.8 }}>Highest score wins</div>
                   <div style={{ fontSize: 12, opacity: 0.8 }}>Compete for pickups</div>
                 </button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 40 }}>
+              <h2 style={{ fontSize: 18, marginBottom: 20, color: "#9be7ff" }}>Select Your Ship</h2>
+              <div style={{ 
+                display: "grid", 
+                gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
+                gap: 12,
+                maxWidth: 600,
+                margin: "0 auto"
+              }}>
+                {Array.from({ length: SHIP_COUNT }, (_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedShip(i)}
+                    style={{
+                      ...shipButtonStyle,
+                      ...(selectedShip === i ? shipButtonActiveStyle : {}),
+                    }}
+                  >
+                    <img 
+                      src={`/ships/ship-${i}.png`} 
+                      alt={`Ship ${i + 1}`}
+                      style={{ width: "100%", height: "auto", display: "block" }}
+                    />
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -145,4 +179,24 @@ const startButtonStyle = {
   fontSize: 18,
   cursor: "pointer",
   transition: "all 0.2s",
+} as const;
+
+const shipButtonStyle = {
+  padding: "8px",
+  background: "#1a2a3f",
+  border: "2px solid #2a3f5a",
+  borderRadius: "8px",
+  cursor: "pointer",
+  transition: "all 0.2s",
+  aspectRatio: "1",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+} as const;
+
+const shipButtonActiveStyle = {
+  background: "#2a4a6f",
+  borderColor: "#58f5ff",
+  boxShadow: "0 0 20px rgba(88, 245, 255, 0.5)",
+  transform: "scale(1.05)",
 } as const;
