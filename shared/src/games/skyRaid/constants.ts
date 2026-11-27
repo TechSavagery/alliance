@@ -33,3 +33,40 @@ export const SKY_PLAYER_COLORS = [
 ];
 
 export const SKY_INTERPOLATION_FACTOR = 0.25;
+
+export const SKY_POWERUP_DROP_CHANCE = 0.25;
+export const SKY_MULTIPLIER_DROP_CHANCE = 0.05;
+export const SKY_POWERUP_DRIFT_SPEED = 1.0;
+export const SKY_POWERUP_COLLECT_RADIUS = 20;
+export const SKY_MULTIPLIER_DURATION_MS = 15000;
+export const SKY_MAX_SHIELDS = 3;
+export const SKY_MAX_BOMBS = 3;
+export const SKY_MAX_POWER_LEVEL = 5;
+export const SKY_MAX_SPEED_LEVEL = 4;
+
+export const SKY_POWER_LEVEL_SPEEDS: Record<number, number> = {
+  1: 4.2,
+  2: 5.0,
+  3: 5.8,
+  4: 6.6,
+};
+
+export const SKY_POWER_LEVEL_COOLDOWNS: Record<number, number> = {
+  1: 180,
+  2: 170,
+  3: 160,
+  4: 150,
+  5: 140,
+};
+
+export const SKY_POWERUP_COLORS = {
+  weapon: 0xff9f1c,
+  speed: 0x58f5ff,
+  shield: 0x7dffb3,
+  bomb: 0xff3366,
+  multiplier: 0xffd166,
+};
+
+export const SKY_REVIVE_RADIUS = 50;
+export const SKY_REVIVE_TIME_MS = 2000;
+export const SKY_REVIVE_REWARD = 200;

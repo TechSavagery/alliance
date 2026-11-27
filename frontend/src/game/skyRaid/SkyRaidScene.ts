@@ -7,6 +7,7 @@ import {
   SKY_GAME_WIDTH,
   SKY_INTERPOLATION_FACTOR,
   SKY_PLAYER_COLORS,
+  SKY_POWERUP_COLORS,
   SkyRaidInput,
 } from "@alliance/shared";
 import { getJoinOptions } from "@/lib/playerIdentity";
@@ -20,10 +21,18 @@ type PlayerView = {
   kills: number;
   deaths: number;
   alive: boolean;
+  powerLevel: number;
+  speedLevel: number;
+  shields: number;
+  bombs: number;
+  multiplier: number;
+  reviveProgress: number;
+  revives: number;
 };
 
 type BulletView = { x: number; y: number };
 type EnemyView = { x: number; y: number; kind: number };
+type PowerUpView = { x: number; y: number; type: number };
 
 type GameCallbacks = {
   onAdd: (
@@ -43,6 +52,8 @@ export class SkyRaidScene extends Phaser.Scene {
   private playerSprites = new Map<string, Phaser.GameObjects.Container>();
   private bulletSprites = new Map<string, Phaser.GameObjects.Arc>();
   private enemySprites = new Map<string, Phaser.GameObjects.Shape>();
+  private powerUpSprites = new Map<string, Phaser.GameObjects.Container>();
+  private reviveBars = new Map<string, Phaser.GameObjects.Graphics>();
   private remoteTargets = new Map<string, { x: number; y: number }>();
   private localPredicted = { x: 0, y: 0 };
   private localSessionId?: string;
@@ -121,6 +132,8 @@ export class SkyRaidScene extends Phaser.Scene {
         callbacks.onChange(view, () => {
           this.remoteTargets.set(sessionId, { x: view.x, y: view.y });
           ship.setAlpha(view.alive ? 1 : 0.2);
+          this.updateShields(ship, view.shields);
+          this.updateReviveProgress(sessionId, view);
           if (isLocal) {
             this.updateHud(view);
             if (!view.alive) {
@@ -134,6 +147,8 @@ export class SkyRaidScene extends Phaser.Scene {
         this.playerSprites.get(sessionId)?.destroy();
         this.playerSprites.delete(sessionId);
         this.remoteTargets.delete(sessionId);
+        this.reviveBars.get(sessionId)?.destroy();
+        this.reviveBars.delete(sessionId);
       });
 
       callbacks.onAdd("bullets", (bullet, id) => {
@@ -158,6 +173,18 @@ export class SkyRaidScene extends Phaser.Scene {
       callbacks.onRemove("enemies", (_enemy, id) => {
         this.enemySprites.get(id)?.destroy();
         this.enemySprites.delete(id);
+      });
+
+      callbacks.onAdd("powerUps", (powerUp, id) => {
+        const view = powerUp as PowerUpView;
+        const sprite = this.createPowerUp(view.x, view.y, view.type);
+        this.powerUpSprites.set(id, sprite);
+        callbacks.onChange(view, () => sprite.setPosition(view.x, view.y));
+      });
+
+      callbacks.onRemove("powerUps", (_powerUp, id) => {
+        this.powerUpSprites.get(id)?.destroy();
+        this.powerUpSprites.delete(id);
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -198,17 +225,27 @@ export class SkyRaidScene extends Phaser.Scene {
       sprite.y = Phaser.Math.Linear(sprite.y, target.y, SKY_INTERPOLATION_FACTOR);
     });
 
-    const wave = (this.room.state as { wave?: number })?.wave;
-    if (typeof wave === "number") {
-      this.waveText?.setText(`Wave ${Math.max(1, wave - 1)}`);
+    const state = this.room.state as { wave?: number; sessionTime?: number };
+    if (typeof state.wave === "number") {
+      const minutes = Math.floor((state.sessionTime ?? 0) / 60);
+      const seconds = (state.sessionTime ?? 0) % 60;
+      const timeStr = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+      this.waveText?.setText(`Wave ${Math.max(1, state.wave - 1)}  |  ${timeStr}`);
     }
   }
 
   private updateHud(player: PlayerView) {
+    const upgrades = [];
+    if (player.powerLevel > 1) upgrades.push(`PWR ${player.powerLevel}`);
+    if (player.speedLevel > 1) upgrades.push(`SPD ${player.speedLevel}`);
+    if (player.shields > 0) upgrades.push(`🛡️${player.shields}`);
+    if (player.bombs > 0) upgrades.push(`💣${player.bombs}`);
+    if (player.multiplier > 1) upgrades.push(`${player.multiplier.toFixed(1)}x`);
+
+    const upgradeStr = upgrades.length > 0 ? `  |  ${upgrades.join("  ")}` : "";
+    
     this.hudText?.setText(
-      `Score ${player.score}  |  Kills ${player.kills}  |  Deaths ${player.deaths}  |  Seat ${
-        player.seat + 1
-      }/6`
+      `Score ${player.score}  |  K ${player.kills}  D ${player.deaths}${upgradeStr}`
     );
     this.hudText?.setColor(player.alive ? "#9be7ff" : "#ff9e9e");
   }
@@ -246,6 +283,80 @@ export class SkyRaidScene extends Phaser.Scene {
         .setDepth(4);
     }
     return this.add.circle(x, y, 11, 0xffd166).setDepth(4);
+  }
+
+  private createPowerUp(x: number, y: number, type: number) {
+    const container = this.add.container(x, y).setDepth(7);
+    
+    const colors = [
+      SKY_POWERUP_COLORS.weapon,
+      SKY_POWERUP_COLORS.speed,
+      SKY_POWERUP_COLORS.shield,
+      SKY_POWERUP_COLORS.bomb,
+      SKY_POWERUP_COLORS.multiplier,
+    ];
+    const color = colors[type] ?? 0xffffff;
+
+    const glow = this.add.circle(0, 0, 14, color, 0.3).setDepth(0);
+    const icon = this.add.circle(0, 0, 8, color).setDepth(1);
+    
+    container.add([glow, icon]);
+
+    this.tweens.add({
+      targets: glow,
+      alpha: { from: 0.3, to: 0.6 },
+      scale: { from: 1, to: 1.2 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    return container;
+  }
+
+  private updateShields(container: Phaser.GameObjects.Container, shields: number) {
+    const existing = container.getAll("name", "shield");
+    existing.forEach((obj) => obj.destroy());
+
+    for (let i = 0; i < shields; i++) {
+      const ring = this.add.circle(0, 0, 18 + i * 4, 0x7dffb3, 0).setDepth(-1);
+      ring.setStrokeStyle(2, 0x7dffb3, 0.6 + i * 0.1);
+      ring.setName("shield");
+      container.add(ring);
+
+      this.tweens.add({
+        targets: ring,
+        alpha: { from: 0.6, to: 0.9 },
+        duration: 500 + i * 100,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
+  }
+
+  private updateReviveProgress(sessionId: string, player: PlayerView) {
+    if (!player.alive && player.reviveProgress > 0) {
+      let bar = this.reviveBars.get(sessionId);
+      if (!bar) {
+        bar = this.add.graphics().setDepth(10);
+        this.reviveBars.set(sessionId, bar);
+      }
+      
+      bar.clear();
+      bar.setPosition(player.x, player.y - 25);
+      bar.fillStyle(0x333333, 0.8);
+      bar.fillRect(-25, 0, 50, 6);
+      bar.fillStyle(0x7dffb3, 1.0);
+      bar.fillRect(-25, 0, 50 * player.reviveProgress, 6);
+      bar.lineStyle(1, 0xffffff, 0.6);
+      bar.strokeRect(-25, 0, 50, 6);
+    } else {
+      const bar = this.reviveBars.get(sessionId);
+      if (bar) {
+        bar.destroy();
+        this.reviveBars.delete(sessionId);
+      }
+    }
   }
 }
 

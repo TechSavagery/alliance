@@ -4,12 +4,14 @@ import {
   SKY_PLAYER_MAX_Y,
   SKY_PLAYER_MIN_Y,
   SKY_PLAYER_SPEED,
+  SKY_POWER_LEVEL_SPEEDS,
 } from "./constants";
 import type { SkyRaidInput } from "./input";
 
 export interface SkyRaidPlayerState {
   x: number;
   y: number;
+  speedLevel?: number;
 }
 
 export function applySkyRaidInput(
@@ -17,10 +19,12 @@ export function applySkyRaidInput(
   input: SkyRaidInput,
   dt: number
 ) {
-  if (input.left) player.x -= SKY_PLAYER_SPEED * dt;
-  if (input.right) player.x += SKY_PLAYER_SPEED * dt;
-  if (input.up) player.y -= SKY_PLAYER_SPEED * dt;
-  if (input.down) player.y += SKY_PLAYER_SPEED * dt;
+  const speed = player.speedLevel ? (SKY_POWER_LEVEL_SPEEDS[player.speedLevel] ?? SKY_PLAYER_SPEED) : SKY_PLAYER_SPEED;
+  
+  if (input.left) player.x -= speed * dt;
+  if (input.right) player.x += speed * dt;
+  if (input.up) player.y -= speed * dt;
+  if (input.down) player.y += speed * dt;
 
   player.x = Math.max(20, Math.min(SKY_MAP_WIDTH - 20, player.x));
   player.y = Math.max(

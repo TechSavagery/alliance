@@ -28,8 +28,18 @@ export function setDisplayName(name: string) {
 }
 
 export function getJoinOptions() {
+  const gameMode = typeof window !== "undefined" 
+    ? window.localStorage.getItem("skyRaid.gameMode") || "coop"
+    : "coop";
+    
   return {
     playerId: getOrCreatePlayerId(),
     displayName: getDisplayName(),
+    gameMode,
   };
+}
+
+export function setSkyRaidGameMode(mode: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem("skyRaid.gameMode", mode);
 }
