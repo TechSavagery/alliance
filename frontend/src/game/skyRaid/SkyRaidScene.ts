@@ -165,9 +165,13 @@ export class SkyRaidScene extends Phaser.Scene {
 
       callbacks.onAdd("bullets", (bullet, id) => {
         const view = bullet as BulletView;
-        const sprite = this.add.circle(view.x, view.y, 3, 0xfff06a).setDepth(3);
+        const sprite = this.add.circle(view.x, view.y, 3, 0xfff06a).setDepth(10);
         this.bulletSprites.set(id, sprite);
-        callbacks.onChange(view, () => sprite.setPosition(view.x, view.y));
+        callbacks.onChange(view, () => {
+          sprite.setPosition(view.x, view.y);
+          sprite.setVisible(true);
+          sprite.setActive(true);
+        });
       });
 
       callbacks.onRemove("bullets", (_bullet, id) => {
@@ -278,17 +282,22 @@ export class SkyRaidScene extends Phaser.Scene {
   private createPlane(x: number, y: number, seat: number, isLocal: boolean) {
     const container = this.add.container(x, y);
     const shipKey = `ship-${this.selectedShip}`;
+    const color = SKY_PLAYER_COLORS[seat % SKY_PLAYER_COLORS.length];
     
     if (this.textures.exists(shipKey)) {
       const ship = this.add.image(0, 0, shipKey);
       ship.setScale(0.5);
       
-      const color = SKY_PLAYER_COLORS[seat % SKY_PLAYER_COLORS.length];
-      ship.setTint(color);
+      const graphics = this.add.graphics();
+      graphics.lineStyle(2, color, 1);
       
-      container.add(ship);
+      const bounds = ship.getBounds();
+      const width = bounds.width * 0.5;
+      const height = bounds.height * 0.5;
+      graphics.strokeRect(-width / 2, -height / 2, width, height);
+      
+      container.add([ship, graphics]);
     } else {
-      const color = SKY_PLAYER_COLORS[seat % SKY_PLAYER_COLORS.length];
       const body = this.add.triangle(0, 0, 0, -14, 10, 12, -10, 12, color);
       const wing = this.add.rectangle(0, 2, 22, 4, color, 0.85);
       container.add([wing, body]);
