@@ -21,6 +21,7 @@ export class SkyRaidPlayer extends Schema {
 export class SkyRaidBullet extends Schema {
   @type("number") x: number = 0;
   @type("number") y: number = 0;
+  @type("number") vx: number = 0;
   @type("number") vy: number = 0;
   @type("string") ownerId: string = "";
 }

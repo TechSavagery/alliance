@@ -217,8 +217,9 @@ export class SkyRaidRoom extends Room {
 
     const bulletsToRemove = new Set<string>();
     this.state.bullets.forEach((bullet, id) => {
+      bullet.x += bullet.vx * dt;
       bullet.y += bullet.vy * dt;
-      if (bullet.y < -20 || bullet.y > SKY_MAP_HEIGHT + 20) {
+      if (bullet.y < -20 || bullet.y > SKY_MAP_HEIGHT + 20 || bullet.x < -20 || bullet.x > SKY_MAP_WIDTH + 20) {
         bulletsToRemove.add(id);
       }
     });
@@ -428,22 +429,21 @@ export class SkyRaidRoom extends Room {
     this.lastShot.set(sessionId, now);
 
     const bulletCount = Math.min(player.powerLevel, 5);
-    const spreadAngle = bulletCount > 1 ? 20 : 0;
+    const spreadAngle = bulletCount > 1 ? 15 : 0;
 
     for (let i = 0; i < bulletCount; i++) {
       const bullet = new SkyRaidBullet();
       bullet.x = player.x;
       bullet.y = player.y - 16;
       bullet.ownerId = sessionId;
+      bullet.vx = 0;
+      bullet.vy = -SKY_BULLET_SPEED;
 
-      if (bulletCount === 1) {
-        bullet.vy = -SKY_BULLET_SPEED;
-      } else {
+      if (bulletCount > 1) {
         const angleOffset = (i - (bulletCount - 1) / 2) * spreadAngle;
         const radians = (angleOffset * Math.PI) / 180;
+        bullet.vx = SKY_BULLET_SPEED * Math.sin(radians);
         bullet.vy = -SKY_BULLET_SPEED * Math.cos(radians);
-        const vx = SKY_BULLET_SPEED * Math.sin(radians);
-        bullet.vy -= vx * 0.1;
       }
 
       this.state.bullets.set(`b${this.bulletId++}`, bullet);
