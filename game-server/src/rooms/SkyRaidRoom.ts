@@ -429,7 +429,7 @@ export class SkyRaidRoom extends Room {
     this.lastShot.set(sessionId, now);
 
     const bulletCount = Math.min(player.powerLevel, 5);
-    const spreadAngle = bulletCount > 1 ? 15 : 0;
+    const spreadAngle = bulletCount > 1 ? 8 : 0;
 
     for (let i = 0; i < bulletCount; i++) {
       const bullet = new SkyRaidBullet();
